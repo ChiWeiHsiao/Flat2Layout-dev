@@ -96,7 +96,7 @@ class FlatLayoutDataset(Dataset):
         # Rescale image to fix size
         # Rescale xy of all corners to [0, 1]
         ori_hw = rgb.shape[:2]
-        rgb = normalize_rgb(resize(rgb, self.hw, preserve_range=True))
+        rgb = normalize_rgb(resize(rgb, self.hw, preserve_range=True, anti_aliasing=False, mode='reflect'))
         for cs in corners_lst:
             cs[:, 0] /= ori_hw[1]  # Rescale x to [0, 1]
             cs[:, 1] /= ori_hw[0]  # Rescale y to [0, 1]
