@@ -52,7 +52,6 @@ def forward_pass(x, y_reg):
         losses['gain_recall'] = tp / (tp + fn)
         losses['gain_i_recall'] = tn / (tn + fp)
 
-    print(losses)
     return losses
 
 def gogo_train():
