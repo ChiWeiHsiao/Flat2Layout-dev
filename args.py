@@ -27,7 +27,6 @@ def parse_args():
     config.read(config_args.config)
     default = dict(config['EXP_SETTING'])
     default['init_bias'] = list(map(float, default.get('init_bias', '').split(',')))
-    default['scales'] = list(map(float, default.get('scales', '').split(',')))
 
     # Placeholder setting from config
     parser.add_argument('--id', help='experiment id to name checkpoints and logs')
