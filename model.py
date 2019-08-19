@@ -64,10 +64,9 @@ class SimpleFlattenHead(nn.Module):
             nn.Conv2d(in_high, in_high//8, kernel_size=1, bias=False),
             nn.BatchNorm2d(in_high//8),
             nn.ReLU(inplace=True),
-            nn.Conv2d(in_high//8, 1, kernel_size=1),
-            nn.Softmax(dim=2)
+            nn.Conv2d(in_high//8, 1, kernel_size=1)
         )
-        self.row_attention[-2].bias.data.fill_(0)
+        self.row_attention[-1].bias.data.fill_(0)
         self.row_gain = nn.Sequential(
             nn.AdaptiveMaxPool2d((1, None)),
             nn.Conv2d(in_high, in_high//8, kernel_size=1, bias=False),
@@ -88,6 +87,8 @@ class SimpleFlattenHead(nn.Module):
     def forward(self, x_low, x_high, w):
         att_high = self.row_attention(x_high)
         att_low = F.interpolate(att_high, size=x_low.shape[2:], mode='bilinear', align_corners=True)
+        att_high = F.softmax(att_high, dim=2)
+        att_low = F.softmax(att_low, dim=2)
 
         gain_high = self.row_gain(x_high).squeeze(2)
         gain_low = F.interpolate(gain_high, size=x_low.shape[3], mode='linear', align_corners=True)
