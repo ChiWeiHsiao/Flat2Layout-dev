@@ -36,6 +36,7 @@ def parse_args():
     parser.add_argument('--valid_gtpath')
     # Loss related
     parser.add_argument('--loss', choices=['l1', 'l2', 'huber', 'berhu'])
+    parser.add_argument('--guide_gain', default=0, type=int)
     # Model related
     parser.add_argument('--net')
     parser.add_argument('--backbone')

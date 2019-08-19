@@ -40,11 +40,18 @@ def forward_pass(x, y_reg):
     else:
         raise NotImplementedError()
 
+    if args.guide_gain:
+        y_gain = (y_reg > -1) & (y_reg < 1)
+        y_gain_ = F.interpolate(y_gain_, y_gain.shape[2], mode='linear', align_corners=True)
+        y_gain_ = torch.clip(y_gain_, 1e-4, 1-1e-4)
+        losses['gain_bce'] = F.binary_cross_entropy(y_gain_, y_gain.float())
+        losses['total'] = losses['total'] + losses['gain_bce']
+
     # Other statistical metric
     with torch.no_grad():
         y_gain_ = F.interpolate(y_gain_, y_reg.shape[2], mode='linear', align_corners=True)
         pred_pos = (y_gain_ > 0.5)
-        gt_pos = (y_reg > -1) & (y_reg > -1)
+        gt_pos = (y_reg > -1) & (y_reg < 1)
         tp = (pred_pos & gt_pos).float().sum()
         tn = (~pred_pos & ~gt_pos).float().sum()
         fp = (pred_pos & ~gt_pos).float().sum()
