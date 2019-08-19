@@ -49,6 +49,8 @@ def forward_pass(x, y_reg):
 
     # Other statistical metric
     with torch.no_grad():
+        losses['l1'] = (y_reg_ - y_reg)[~dontcare].abs().mean()
+
         y_gain_ = F.interpolate(y_gain_, y_reg.shape[2], mode='linear', align_corners=True)
         pred_pos = (y_gain_ > 0.5)
         gt_pos = (y_reg > -1) & (y_reg < 1)
