@@ -108,7 +108,7 @@ class SimpleModel(nn.Module):
     def __init__(self, init_bias=[-0.5, 0.5], backbone='resnext50_32x4d', dilate_scale=8):
         super(SimpleModel, self).__init__()
         # Encoder
-        self.encoder = Resnet(backbone, dilate_scale)
+        self.encoder = Resnet(backbone, pretrained=True, dilate_scale=dilate_scale)
         with torch.no_grad():
             # Inference the channels of skip connection
             dummy = torch.rand(1, 3, 512, 512)

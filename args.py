@@ -39,8 +39,8 @@ def parse_args():
     parser.add_argument('--guide_gain', default=0, type=int)
     # Model related
     parser.add_argument('--net')
-    parser.add_argument('--backbone')
-    parser.add_argument('--dilate_scale')
+    parser.add_argument('--backbone', default='resnext50_32x4d')
+    parser.add_argument('--dilate_scale', type=int)
     parser.add_argument('--init_bias', nargs='*', type=float)
     parser.add_argument('--freeze_earlier_blocks', type=int)
     parser.add_argument('--freeze_bn', type=int)
