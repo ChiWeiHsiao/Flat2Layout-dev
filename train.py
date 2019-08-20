@@ -16,7 +16,7 @@ def forward_pass(x, y_reg):
 
     # Encoder batch forward => feature pyramid
     losses = {}
-    y_reg_, y_att_, y_gain_ = net(x)
+    y_reg_, y_att_ = net(x)
     total_pixel = np.prod(y_reg.shape)
     dontcare = (
         (y_reg_ < -1) & (y_reg < -1) |\
@@ -40,26 +40,37 @@ def forward_pass(x, y_reg):
     else:
         raise NotImplementedError()
 
-    if args.guide_gain:
-        y_gain = (y_reg > -1) & (y_reg < 1)
-        y_gain_ = F.interpolate(y_gain_, y_gain.shape[2], mode='linear', align_corners=True)
-        y_gain_ = torch.clamp(y_gain_, 1e-4, 1-1e-4)
-        losses['gain_bce'] = F.binary_cross_entropy(y_gain_, y_gain.float())
-        losses['total'] = losses['total'] + losses['gain_bce']
+    if args.lap_order:
+        inplane = (y_reg > -1) & (y_reg < 1)
+        dx = 2 / (x.shape[3] - 1)
+        my = y_reg[:, :, args.lap_order:-args.lap_order]
+        ly = y_reg[:, :, :-args.lap_order*2]
+        ry = y_reg[:, :, args.lap_order*2:]
+        dy = (ly - my) + (ry - my)
+        my_ = y_reg_[:, :, args.lap_order:-args.lap_order]
+        ly_ = y_reg_[:, :, :-args.lap_order*2]
+        ry_ = y_reg_[:, :, args.lap_order*2:]
+        dy_ = (ly_ - my_) + (ry_ - my_)
+        mask = inplane[:, :, args.lap_order:-args.lap_order] &\
+               inplane[:, :, :-args.lap_order*2] &\
+               inplane[:, :, args.lap_order*2:]
+        losses['lap'] = (dy - dy_)[mask].abs().mean()
+        losses['total'] = losses['total'] + 5 * losses['lap']
 
     # Other statistical metric
     with torch.no_grad():
         losses['l1'] = (y_reg_ - y_reg)[~dontcare].abs().mean()
 
-        y_gain_ = F.interpolate(y_gain_, y_reg.shape[2], mode='linear', align_corners=True)
-        pred_pos = (y_gain_ > 0.5)
-        gt_pos = (y_reg > -1) & (y_reg < 1)
-        tp = (pred_pos & gt_pos).float().sum()
-        tn = (~pred_pos & ~gt_pos).float().sum()
-        fp = (pred_pos & ~gt_pos).float().sum()
-        fn = (~pred_pos & gt_pos).float().sum()
-        losses['gain_recall'] = tp / (tp + fn)
-        losses['gain_i_recall'] = tn / (tn + fp)
+        valid = (y_reg >= -1) & (y_reg <= 1)
+        valid_ = (y_reg_ >= -1) & (y_reg_ <= 1)
+        tp = (valid & valid_).float().sum()
+        fp = (~valid & valid_).float().sum()
+        tn = (~valid & ~valid_).float().sum()
+        fn = (valid & ~valid_).float().sum()
+        if tn + fp > 0:
+            losses['neg_r'] = tn / (tn + fp)
+        if tn + fn > 0:
+            losses['neg_p'] = tn / (tn + fn)
 
     return losses
 
@@ -107,6 +118,7 @@ def gogo_valid():
             for k, v in losses.items():
                 valid_loss[k] = valid_loss.get(k, 0) + v.item() * x.size(0)
 
+        print(dict([(k, v / valid_num) for k, v in valid_loss.items()]))
         for k, v in valid_loss.items():
             k = 'valid/%s' % k
             tb_writer.add_scalar(k, v / valid_num, ith_epoch)

@@ -67,15 +67,6 @@ class SimpleFlattenHead(nn.Module):
             nn.Conv2d(in_high//8, 1, kernel_size=1)
         )
         self.row_attention[-1].bias.data.fill_(0)
-        self.row_gain = nn.Sequential(
-            nn.AdaptiveMaxPool2d((1, None)),
-            nn.Conv2d(in_high, in_high//8, kernel_size=1, bias=False),
-            nn.BatchNorm2d(in_high//8),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_high//8, 1, kernel_size=1),
-            nn.Sigmoid()
-        )
-        self.row_gain[-2].bias.data.fill_(1)
 
         self.fc = nn.Sequential(
             nn.Conv2d(in_low+in_high, 256, kernel_size=1, bias=False),
@@ -90,11 +81,8 @@ class SimpleFlattenHead(nn.Module):
         att_high = F.softmax(att_high, dim=2)
         att_low = F.softmax(att_low, dim=2)
 
-        gain_high = self.row_gain(x_high).squeeze(2)
-        gain_low = F.interpolate(gain_high, size=x_low.shape[3], mode='linear', align_corners=True)
-
-        x_high = (x_high * att_high).sum(2) * gain_high
-        x_low = (x_low * att_low).sum(2) * gain_low
+        x_high = (x_high * att_high).sum(2)
+        x_low = (x_low * att_low).sum(2)
 
         x_final = torch.cat([
             F.interpolate(x_high, size=w, mode='linear', align_corners=True),
@@ -103,7 +91,7 @@ class SimpleFlattenHead(nn.Module):
 
         out = self.fc(x_final)
 
-        return out, att_low, gain_low
+        return out, att_low
 
 class SimpleModel(nn.Module):
     def __init__(self, init_bias=[-0.5, 0.5], backbone='resnext50_32x4d', dilate_scale=8):
@@ -124,12 +112,11 @@ class SimpleModel(nn.Module):
 
     def forward(self, x):
         x1, x2, x3, x4 = self.encoder(x)
-        y_c, y_c_att, y_c_gain = self.y_c(x1, x4, x.shape[3])
-        y_f, y_f_att, y_f_gain = self.y_f(x1, x4, x.shape[3])
+        y_c, y_c_att = self.y_c(x1, x4, x.shape[3])
+        y_f, y_f_att = self.y_f(x1, x4, x.shape[3])
         y_reg = torch.cat([y_c, y_f], 1).squeeze(2)
         y_att = torch.cat([y_c_att, y_f_att], 1)
-        y_gain = torch.cat([y_c_gain, y_f_gain], 1)
-        return y_reg, y_att, y_gain
+        return y_reg, y_att
 
 
 if __name__ == '__main__':
