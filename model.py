@@ -57,6 +57,40 @@ class Resnet(nn.Module):
 '''
 Final models
 '''
+class GlobalMaxpoolHead(nn.Module):
+    def __init__(self, in_low, in_high):
+        super(GlobalMaxpoolHead, self).__init__()
+        self.proc_high = nn.Sequential(
+            nn.Conv2d(in_high, in_high//8, kernel_size=3),
+            nn.BatchNorm2d(in_high//8),
+            nn.ReLU(inplace=True),
+        )
+        self.proc_low = nn.Sequential(
+            nn.Conv2d(in_low, in_low//8, kernel_size=3),
+            nn.BatchNorm2d(in_low//8),
+            nn.ReLU(inplace=True),
+        )
+
+        self.fc = nn.Sequential(
+            nn.Conv2d(in_high//8 + in_low//8, 256, kernel_size=1, bias=False),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 1, kernel_size=1)
+        )
+
+    def forward(self, x_low, x_high, w):
+        x_high = self.proc_high(x_high)
+        x_low = self.proc_low(x_low)
+        x_high = F.adaptive_max_pool2d(x_high, (1, None)).squeeze(2)
+        x_low = F.adaptive_max_pool2d(x_low, (1, None)).squeeze(2)
+
+        x_final = torch.cat([
+            F.interpolate(x_high, size=w, mode='linear', align_corners=True),
+            F.interpolate(x_low, size=w, mode='linear', align_corners=True)
+        ], 1).unsqueeze(2)
+
+        return self.fc(x_final)
+
 class SimpleFlattenHead(nn.Module):
     def __init__(self, in_low, in_high):
         super(SimpleFlattenHead, self).__init__()
@@ -92,6 +126,30 @@ class SimpleFlattenHead(nn.Module):
         out = self.fc(x_final)
 
         return out, att_low
+
+class MaxpoolModel(nn.Module):
+    def __init__(self, init_bias=[-0.5, 0.5], backbone='resnext50_32x4d', dilate_scale=8):
+        super(MaxpoolModel, self).__init__()
+        # Encoder
+        self.encoder = Resnet(backbone, pretrained=True, dilate_scale=dilate_scale)
+        with torch.no_grad():
+            # Inference the channels of skip connection
+            dummy = torch.rand(1, 3, 512, 512)
+            in_c = [int(v.shape[1]) for v in self.encoder(dummy)]
+
+        # Simple head
+        self.y_c = GlobalMaxpoolHead(in_c[0], in_c[-1])
+        self.y_f = GlobalMaxpoolHead(in_c[0], in_c[-1])
+
+        self.y_c.fc[-1].bias.data.fill_(init_bias[0])
+        self.y_f.fc[-1].bias.data.fill_(init_bias[1])
+
+    def forward(self, x):
+        x1, x2, x3, x4 = self.encoder(x)
+        y_c = self.y_c(x1, x4, x.shape[3])
+        y_f = self.y_f(x1, x4, x.shape[3])
+        y_reg = torch.cat([y_c, y_f], 1).squeeze(2)
+        return y_reg
 
 class SimpleModel(nn.Module):
     def __init__(self, init_bias=[-0.5, 0.5], backbone='resnext50_32x4d', dilate_scale=8):

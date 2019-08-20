@@ -19,7 +19,7 @@ def input_countdown(timeout=30):
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', default='exp_setting/default.config')
+    parser.add_argument('--config')
 
     # Read exp setting from config file first
     config_args, remaining_argv = parser.parse_known_args()

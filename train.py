@@ -16,7 +16,7 @@ def forward_pass(x, y_reg):
 
     # Encoder batch forward => feature pyramid
     losses = {}
-    y_reg_, y_att_ = net(x)
+    y_reg_ = net(x)
     total_pixel = np.prod(y_reg.shape)
     dontcare = (
         (y_reg_ < -1) & (y_reg < -1) |\
