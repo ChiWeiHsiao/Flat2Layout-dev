@@ -55,7 +55,9 @@ def parse_args():
     parser.add_argument('--batch_size_train', type=int, help='training mini-batch size')
     parser.add_argument('--batch_size_valid', type=int, help='validation mini-batch size')
     # Training related
+    parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--lr', type=float, help='learning rate')
+    parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--epochs', type=int, help='epochs to train')
     # Misc
     parser.add_argument('--no_cuda', help='disable cuda', type=int)
