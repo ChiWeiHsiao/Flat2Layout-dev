@@ -62,21 +62,12 @@ if __name__ == '__main__':
 
         # Prepare output
         with torch.no_grad():
-            out_reg, out_att = net(x[None])
+            out_reg = net(x[None])
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
-            np_att = out_att[0].cpu().numpy()
 
-        att_rgb = np.zeros((*np_att.shape[1:], 3), np.float32)
-        att_rgb[..., 1] = np_att[0]
-        att_rgb[..., 2] = np_att[1]
         plt.imshow(rgb)
         plt.plot(np.arange(w), np_reg[0] * h, 'g-')
         plt.plot(np.arange(w), np_reg[1] * h, 'b-')
         plt.savefig(os.path.join(args.out, gt['img_name'][ith] + '.rgb.png'))
         plt.clf()
 
-        plt.imshow(att_rgb)
-        # plt.plot(np.arange(w), np_reg[0] * att_rgb.shape[0], 'g-')
-        # plt.plot(np.arange(w), np_reg[1] * att_rgb.shape[0], 'b-')
-        plt.savefig(os.path.join(args.out, gt['img_name'][ith] + '.att.png'))
-        plt.clf()

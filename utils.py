@@ -5,7 +5,7 @@ from collections import OrderedDict
 import torch
 import torch.nn.functional as F
 
-import model
+import model_HorizonNet as model
 
 
 def save_model(net, path, kwargs, model_kwargs):
