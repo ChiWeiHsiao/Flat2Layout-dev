@@ -27,7 +27,6 @@ def parse_args():
     config.read(config_args.config)
     default = dict(config['EXP_SETTING'])
     default['init_bias'] = list(map(float, default.get('init_bias', '').split(',')))
-    default['scales'] = list(map(float, default.get('scales', '').split(',')))
 
     # Placeholder setting from config
     parser.add_argument('--id', help='experiment id to name checkpoints and logs')
@@ -49,6 +48,7 @@ def parse_args():
     # Dataset related
     parser.add_argument('--flip', type=int, help='use flip augmentation')
     parser.add_argument('--gamma', type=int, help='use gamma augmentation')
+    parser.add_argument('--outy_mode', choices=['linear', 'constant'], help='setting value of y when it is outside image plane')
     parser.add_argument('--main_h', type=int)
     parser.add_argument('--main_w', type=int)
     parser.add_argument('--scales', nargs='*', type=float)
