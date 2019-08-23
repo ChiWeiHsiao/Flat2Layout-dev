@@ -18,15 +18,16 @@ def forward_pass(x, y_reg):
     losses = {}
     y_reg_ = net(x)
     total_pixel = np.prod(y_reg.shape)
-    dontcare = (
-        (y_reg_ < -1) & (y_reg < -1) |\
-        (y_reg_ > 1) & (y_reg > 1)
-    )
+    #  dontcare = (
+        #  (y_reg_ < -1) & (y_reg < -1) |\
+        #  (y_reg_ > 1) & (y_reg > 1)
+    #  )
 
     if args.loss == 'l1':
-        losses['total'] = (y_reg_ - y_reg)[~dontcare].abs().sum() / total_pixel
+        losses['total'] = (y_reg_ - y_reg).abs().sum() / total_pixel
+        #  losses['total'] = (y_reg_ - y_reg)[~dontcare].abs().sum() / total_pixel
     elif args.loss == 'l2':
-        losses['total'] = ((y_reg_ - y_reg)[~dontcare]**2).sum() / total_pixel
+        losses['total'] = ((y_reg_ - y_reg)**2).sum() / total_pixel
     elif args.loss == 'berhu':
         l1 = (y_reg_ - y_reg).abs()
         T = l1.max().item() * 0.2
@@ -59,7 +60,7 @@ def forward_pass(x, y_reg):
 
     # Other statistical metric
     with torch.no_grad():
-        losses['l1'] = (y_reg_ - y_reg)[~dontcare].abs().mean()
+        losses['l1'] = (y_reg_ - y_reg).abs().mean()
 
         valid = (y_reg >= -1) & (y_reg <= 1)
         valid_ = (y_reg_ >= -1) & (y_reg_ <= 1)
