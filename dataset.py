@@ -84,8 +84,8 @@ class FlatLayoutDataset(Dataset):
         rgb, cc, cf, ccw, cfw = self._final_normalize(rgb, cc, cf, ccw, cfw)
 
         # Generate 1d regression gt
-        u_1d = gen_1d(cc, rgb.shape[1], missing_val=-1.01)
-        d_1d = gen_1d(cf, rgb.shape[1], missing_val=1.01)
+        u_1d = gen_1d(cc, rgb.shape[1], missing_val=-1.1)
+        d_1d = gen_1d(cf, rgb.shape[1], missing_val=1.1)
 
         # To tensor
         x = torch.FloatTensor(rgb.transpose(2, 0, 1).copy())
