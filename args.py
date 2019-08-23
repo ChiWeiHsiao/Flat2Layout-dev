@@ -19,7 +19,7 @@ def input_countdown(timeout=30):
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--config', default='exp_setting/default.config')
+    parser.add_argument('--config')
 
     # Read exp setting from config file first
     config_args, remaining_argv = parser.parse_known_args()
@@ -36,11 +36,13 @@ def parse_args():
     parser.add_argument('--valid_imgroot')
     parser.add_argument('--valid_gtpath')
     # Loss related
-    parser.add_argument('--loss', choices=['l1', 'l2', 'berhu'])
+    parser.add_argument('--loss', choices=['l1', 'l2', 'huber', 'berhu'])
+    parser.add_argument('--lap_order', default=0, type=int, help='gradient form by pred. and gt.')
+    parser.add_argument('--guide_gain', default=0, type=int)
     # Model related
     parser.add_argument('--net')
-    parser.add_argument('--backbone')
-    parser.add_argument('--dilate_scale')
+    parser.add_argument('--backbone', default='resnext50_32x4d')
+    parser.add_argument('--dilate_scale', type=int)
     parser.add_argument('--init_bias', nargs='*', type=float)
     parser.add_argument('--freeze_earlier_blocks', type=int)
     parser.add_argument('--freeze_bn', type=int)
@@ -54,7 +56,9 @@ def parse_args():
     parser.add_argument('--batch_size_train', type=int, help='training mini-batch size')
     parser.add_argument('--batch_size_valid', type=int, help='validation mini-batch size')
     # Training related
+    parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--lr', type=float, help='learning rate')
+    parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--epochs', type=int, help='epochs to train')
     # Misc
     parser.add_argument('--no_cuda', help='disable cuda', type=int)

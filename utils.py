@@ -6,6 +6,7 @@ import torch
 import torch.nn.functional as F
 
 import model
+import model_HorizonNet
 
 
 def save_model(net, path, kwargs, model_kwargs):
@@ -19,7 +20,10 @@ def save_model(net, path, kwargs, model_kwargs):
 def load_trained_model(path):
     state_dict = torch.load(path, map_location='cpu')
     kwargs = state_dict['kwargs']
-    Net = getattr(model, kwargs['net'])
+    if kwargs['net'] == 'HorizonNet':
+        Net = getattr(model_HorizonNet, kwargs['net'])
+    else:
+        Net = getattr(model, kwargs['net'])
     net = Net(**state_dict['model_kwargs'])
     try:
         net.load_state_dict(state_dict['state_dict'])

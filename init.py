@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 import model
+import model_HorizonNet
 from dataset import FlatLayoutDataset
 
 
@@ -36,7 +37,10 @@ def init(args):
         loader_valid = None
 
     # Create model
-    Model = getattr(model, args.net)
+    if args.net == 'HorizonNet':
+        Model = getattr(model_HorizonNet, args.net)
+    else:
+        Model = getattr(model, args.net)
     model_kwargs = {'init_bias': args.init_bias}
     if args.backbone:
         model_kwargs['backbone'] = args.backbone
@@ -54,9 +58,10 @@ def init(args):
                     param.requires_grad = False
 
     # Create optimizer
-    optimizer = optim.Adam(
+    optimizer = getattr(optim, args.optimizer)(
         filter(lambda p: p.requires_grad, net.parameters()),
-        lr=args.lr
+        lr=args.lr,
+        weight_decay=args.weight_decay
     )
 
     # Create tensorboard for monitoring training
