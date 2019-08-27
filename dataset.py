@@ -82,7 +82,7 @@ def gen_1d(xys, w, missing_val, mode='constant'):
 
 class FlatLayoutDataset(Dataset):
     def __init__(self, imgroot, gtpath, hw=(512, 512),
-                 flip=False, gamma=False, outy_mode='constant'):
+                 flip=False, gamma=False, outy_mode='constant', outy_val=(-1.05,1.05)):
         gt = np.load(gtpath)
         self.gt_path = []
         for name in gt['img_name']:
@@ -103,6 +103,7 @@ class FlatLayoutDataset(Dataset):
         self.flip = flip
         self.gamma = gamma
         self.outy_mode = outy_mode
+        self.outy_val = outy_val
 
     def __len__(self):
         return len(self.gt_path)
@@ -127,8 +128,8 @@ class FlatLayoutDataset(Dataset):
         rgb, cc, cf, ccw, cfw = self._final_normalize(rgb, cc, cf, ccw, cfw)
 
         # Generate 1d regression gt
-        u_1d = gen_1d(cc, rgb.shape[1], missing_val=-1.1, mode=self.outy_mode)
-        d_1d = gen_1d(cf, rgb.shape[1], missing_val=1.1, mode=self.outy_mode)
+        u_1d = gen_1d(cc, rgb.shape[1], missing_val=self.outy_val[0], mode=self.outy_mode)
+        d_1d = gen_1d(cf, rgb.shape[1], missing_val=self.outy_val[1], mode=self.outy_mode)
 
         # To tensor
         x = torch.FloatTensor(rgb.transpose(2, 0, 1).copy())
