@@ -141,9 +141,6 @@ class GlobalHeightStage(nn.Module):
 HorizonNet
 '''
 class HorizonNet(nn.Module):
-    x_mean = torch.FloatTensor(np.array([0.485, 0.456, 0.406])[None, :, None, None])
-    x_std = torch.FloatTensor(np.array([0.229, 0.224, 0.225])[None, :, None, None])
-
     def __init__(self, backbone, use_rnn=True, init_bias=[-0.5, 0.5]):
         super(HorizonNet, self).__init__()
         self.out_c = 2  # 2=y1,y2 3=y1,y2,c
@@ -196,17 +193,8 @@ class HorizonNet(nn.Module):
             self.linear[-1].bias.data[4::8].fill_(init_bias[1])
             if self.out_c == 3:
                 self.linear[-1].bias.data[8::12].fill_(init_bias[2])  # c:-1
-        self.x_mean.requires_grad = False
-        self.x_std.requires_grad = False
-
-    def _prepare_x(self, x):
-        if self.x_mean.device != x.device:
-            self.x_mean = self.x_mean.to(x.device)
-            self.x_std = self.x_std.to(x.device)
-        return (x[:, :3] - self.x_mean) / self.x_std
 
     def forward(self, x):
-        x = self._prepare_x(x)
         conv_list = self.feature_extractor(x)
         feature = self.reduce_height_module(conv_list, x.shape[3]//self.step_cols)
 
@@ -232,3 +220,4 @@ class HorizonNet(nn.Module):
         #  bon = output[:, 1:]  # B x 2 x W
 
         #  return bon, cor
+
