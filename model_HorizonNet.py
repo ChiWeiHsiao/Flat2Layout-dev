@@ -178,10 +178,10 @@ class HorizonNet(nn.Module):
             self.drop_out = nn.Dropout(0.5)
             self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
                                     out_features=self.out_c * self.step_cols)
-            self.linear.bias.data[0::4].fill_(init_bias[0])
-            self.linear.bias.data[4::8].fill_(init_bias[1])
+            self.linear.bias.data[0:4].fill_(init_bias[0])
+            self.linear.bias.data[4:8].fill_(init_bias[1])
             if self.out_c == 3:
-                self.linear.bias.data[8::12].fill_(init_bias[2])  # c:-1
+                self.linear.bias.data[8:12].fill_(init_bias[2])  # c:-1
         else:
             self.linear = nn.Sequential(
                 nn.Linear(c_last, self.rnn_hidden_size),
@@ -189,10 +189,10 @@ class HorizonNet(nn.Module):
                 nn.Dropout(0.5),
                 nn.Linear(self.rnn_hidden_size, self.out_c * self.step_cols),
             )
-            self.linear[-1].bias.data[0::4].fill_(init_bias[0])
-            self.linear[-1].bias.data[4::8].fill_(init_bias[1])
+            self.linear[-1].bias.data[0:4].fill_(init_bias[0])
+            self.linear[-1].bias.data[4:8].fill_(init_bias[1])
             if self.out_c == 3:
-                self.linear[-1].bias.data[8::12].fill_(init_bias[2])  # c:-1
+                self.linear[-1].bias.data[8:12].fill_(init_bias[2])  # c:-1
 
     def forward(self, x):
         conv_list = self.feature_extractor(x)
