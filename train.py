@@ -12,6 +12,8 @@ from utils import save_model
 
 def forward_pass(x, y_reg):
     x = x.to(device)
+    if args.y_step:
+        y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2
     y_reg = y_reg.to(device)
 
     # Encoder batch forward => feature pyramid

@@ -23,6 +23,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--pth', required=True)
     parser.add_argument('--out', required=True)
+    parser.add_argument('--y_step', type=int, default=1)
     parser.add_argument('--imgroot', default='datas/lsun/images')
     parser.add_argument('--gtpath', default='datas/lsun/validation.npz')
     args = parser.parse_args()
@@ -66,8 +67,12 @@ if __name__ == '__main__':
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
 
         plt.imshow(rgb)
-        plt.plot(np.arange(w), np_reg[0] * h, 'g-')
-        plt.plot(np.arange(w), np_reg[1] * h, 'b-')
+        print('np_reg: ', np_reg.shape)
+        print('np_reg[0]: ', np_reg[0].shape)
+        print('np_reg[1]: ', np_reg[1].shape)
+        x_coord = np.arange(w, step=args.y_step)   
+        plt.plot(x_coord, np_reg[0] * h, 'g-')
+        plt.plot(x_coord, np_reg[1] * h, 'b-')
         plt.savefig(os.path.join(args.out, gt['img_name'][ith] + '.rgb.png'))
         plt.clf()
 

@@ -118,7 +118,6 @@ class GlobalHeightStage(nn.Module):
     def __init__(self, c1, c2, c3, c4, out_scale=8):
         ''' Process 4 blocks from encoder to single multiscale features '''
         super(GlobalHeightStage, self).__init__()
-        self.cs = c1, c2, c3, c4
         self.out_scale = out_scale
         self.ghc_lst = nn.ModuleList([
             GlobalHeightConv(c1, c1//out_scale),
@@ -132,7 +131,7 @@ class GlobalHeightStage(nn.Module):
         bs = conv_list[0].shape[0]
         feature = torch.cat([
             f(x, out_w).reshape(bs, -1, out_w)
-            for f, x, out_c in zip(self.ghc_lst, conv_list, self.cs)
+            for f, x in zip(self.ghc_lst, conv_list)
         ], dim=1)
         return feature
 
@@ -221,3 +220,94 @@ class HorizonNet(nn.Module):
 
         #  return bon, cor
 
+class LowResHorizonNet(nn.Module):
+    def __init__(self, backbone, use_rnn=True, init_bias=[-0.5, 0.5]):
+        super(LowResHorizonNet, self).__init__()
+        self.out_c = 2  # 2=y1,y2 3=y1,y2,c
+        self.backbone = backbone
+        self.use_rnn = use_rnn
+        self.step_cols = 1
+        self.rnn_hidden_size = 256
+
+        # Encoder
+        if backbone.startswith('res'):
+            self.feature_extractor = Resnet(backbone, pretrained=True)
+        elif backbone.startswith('dense'):
+            self.feature_extractor = Densenet(backbone, pretrained=True)
+        else:
+            raise NotImplementedError()
+
+        # Inference channels number from each block of the encoder
+        with torch.no_grad():
+            dummy = torch.zeros(1, 3, 512, 1024)
+            c1, c2, c3, c4 = [b.shape[1] for b in self.feature_extractor(dummy)]
+
+        # Convert features from block 4 of the encoder into B x C x 1 x W'
+        self.reduce_height_module = nn.Sequential(
+            ConvCompressH(c4, c4//2),
+            ConvCompressH(c4//2, c4//2),
+            ConvCompressH(c4//2, c4//4),
+            ConvCompressH(c4//4, c4//8),
+        )
+        c_last = 2*c4//8  # h*c
+
+        # 1D prediction
+        if self.use_rnn:
+            self.bi_rnn = nn.LSTM(input_size=c_last,
+                                  hidden_size=self.rnn_hidden_size,
+                                  num_layers=2,
+                                  dropout=0.5,
+                                  batch_first=False,
+                                  bidirectional=True)
+            self.drop_out = nn.Dropout(0.5)
+            self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
+                                    out_features=self.out_c * self.step_cols)
+            self.linear.bias.data[0:4].fill_(init_bias[0])
+            self.linear.bias.data[4:8].fill_(init_bias[1])
+            if self.out_c == 3:
+                self.linear.bias.data[8:12].fill_(init_bias[2])  # c:-1
+        else:
+            self.linear = nn.Sequential(
+                nn.Linear(c_last, self.rnn_hidden_size),
+                nn.ReLU(inplace=True),
+                nn.Dropout(0.5),
+                nn.Linear(self.rnn_hidden_size, self.out_c * self.step_cols),
+            )
+            self.linear[-1].bias.data[0:4].fill_(init_bias[0])
+            self.linear[-1].bias.data[4:8].fill_(init_bias[1])
+            if self.out_c == 3:
+                self.linear[-1].bias.data[8:12].fill_(init_bias[2])  # c:-1
+
+    def forward(self, x):
+        conv_list = self.feature_extractor(x)
+        last_block = conv_list[-1]
+
+        feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
+        feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
+        if self.use_rnn:
+            feature = feature.permute(2, 0, 1)  # [w, b, c*h]
+            output, hidden = self.bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
+            output = self.drop_out(output)
+            output = self.linear(output)  # [seq_len, b, 3 * step_cols]
+            output = output.view(output.shape[0], output.shape[1], self.out_c, self.step_cols)  # [seq_len, b, 3, step_cols]
+            output = output.permute(1, 2, 0, 3)  # [b, 3, seq_len, step_cols]
+            output = output.contiguous().view(output.shape[0], self.out_c, -1)  # [b, 3, seq_len*step_cols]
+        else:
+            feature = feature.permute(0, 2, 1)  # [b, w, c*h]
+            output = self.linear(feature)  # [b, w, 3 * step_cols]
+            output = output.view(output.shape[0], output.shape[1], self.out_c, self.step_cols)  # [b, w, 3, step_cols]
+            output = output.permute(0, 2, 1, 3)  # [b, 3, w, step_cols]
+            output = output.contiguous().view(output.shape[0], self.out_c, -1)  # [b, 3, w*step_cols]
+
+        return output
+
+
+if __name__ == '__main__':
+    net = LowResHorizonNet(backbone='resnet50')
+    dummy = torch.zeros(1, 3, 640, 640)
+    pred = net(dummy)
+    print('output shape w/ rnn: ', pred.shape)  # (1, 2, 20)
+
+    net = LowResHorizonNet(backbone='resnet50', use_rnn=False)
+    pred = net(dummy)
+    print('output shape w/o rnn: ', pred.shape)
