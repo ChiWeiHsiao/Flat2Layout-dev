@@ -22,6 +22,15 @@ def undo_normalize_rgb(rgb):
     rgb_std = np.array([[[0.229, 0.224, 0.225]]])
     return rgb * rgb_std + rgb_mean
 
+def gen_1d_corner(xys, w):
+    # xys in [0, 1]
+    cor_1d = np.zeros(w, np.float32)
+    if len(xys) <= 2:
+        return cor_1d
+    x = xys[1:-1, 0] * w
+    cor_1d[x.astype(int)] = 1
+    return cor_1d
+
 def gen_1d(xys, w, missing_val, mode='constant'):
     '''  generate 1d boundary GT
     Input:
@@ -133,16 +142,19 @@ class FlatLayoutDataset(Dataset):
         # Generate 1d regression gt
         u_1d = gen_1d(cc, rgb.shape[1], missing_val=self.outy_val[0], mode=self.outy_mode)
         d_1d = gen_1d(cf, rgb.shape[1], missing_val=self.outy_val[1], mode=self.outy_mode)
+        u_1d_corner = gen_1d_corner(cc, rgb.shape[1])
+        d_1d_corner = gen_1d_corner(cf, rgb.shape[1])
 
         # To tensor
         x = torch.FloatTensor(rgb.transpose(2, 0, 1).copy())
         y_reg = torch.FloatTensor([u_1d, d_1d])
+        y_cor = torch.FloatTensor([u_1d_corner, d_1d_corner])
 
         if self.y_step > 1 and self.gen_doncare:
             y_dontcare = self._gen_doncare_mask(cc, cf, self.y_step)
-            return x, y_reg, y_dontcare
+            return x, y_reg, y_cor, y_dontcare
         else:
-            return x, y_reg
+            return x, y_reg, y_cor
 
     def _gen_doncare_mask(self, cc, cf, y_step):
         # shape [2, W]
@@ -199,7 +211,9 @@ if __name__ == '__main__':
     import argparse
     from tqdm import trange
     from torch.utils.data import DataLoader
+    import matplotlib; matplotlib.use('agg')
     import matplotlib.pyplot as plt
+    from scipy.ndimage.filters import convolve1d
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--imgroot', default='datas/lsun/images_640x640')
@@ -217,15 +231,21 @@ if __name__ == '__main__':
             #  continue
 
         #  x, y_reg = dataset[i]
-        x, y_reg, y_dontcare = dataset[i]
+        x, y_reg, y_cor, y_dontcare = dataset[i]
         y_reg[0, y_dontcare[0]] = -1.5
         y_reg[1, y_dontcare[1]] = 1.5
 
-        rgb = undo_normalize_rgb(x.permute(1, 2, 0).numpy())
+        rgb = np.clip(undo_normalize_rgb(x.permute(1, 2, 0).numpy()), 0, 1)
         u_1d, d_1d = y_reg.numpy()
+        u_1d_corner, d_1d_corner = y_cor.numpy()
 
-        plt.imshow(np.clip(rgb, 0, 1))
+        u_1d_xs = np.where(u_1d_corner)[0]
+        d_1d_xs = np.where(d_1d_corner)[0]
+
+        plt.imshow(rgb)
         plt.plot(np.arange(rgb.shape[1]), (u_1d / 2 + 0.5) * rgb.shape[0], 'b-')
         plt.plot(np.arange(rgb.shape[1]), (d_1d / 2 + 0.5) * rgb.shape[0], 'g-')
+        plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
+        plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')
         plt.savefig('vis/dataset/%s.vis.png' % (dataset.gt_path[i].split('/')[-1][:-4]))
         plt.clf()

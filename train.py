@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from init import init
-from utils import save_model
+from utils import save_model, adjust_learning_rate
 
 
 def forward_pass(x, y_reg, y_dontcare=None):
@@ -88,21 +88,22 @@ def forward_pass(x, y_reg, y_dontcare=None):
 def gogo_train():
     net.train()
     if args.freeze_earlier_blocks != -1:
-        b0, b1, b2, b3, b4 = net.encoder.list_blocks()
+        b0, b1, b2, b3, b4 = net.feature_extractor.list_blocks()
         blocks = [b0, b1, b2, b3, b4]
         for i in range(args.freeze_earlier_blocks + 1):
             for m in blocks[i]:
                 m.eval()
     if args.freeze_bn:
-        for m in net.encoder.modules():
+        for m in net.feature_extractor.modules():
             if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
                 m.eval()
     iterator_train = iter(loader_train)
     for _ in trange(len(loader_train),
                     desc='Train ep%s' % ith_epoch, position=1):
+        adjust_learning_rate(optimizer, args)
         args.cur_iter += 1
         if args.y_step > 1 and args.ori_res_loss:
-            x, y_reg, y_dontcare = next(iterator_train)
+            x, y_reg, y_cor, y_dontcare = next(iterator_train)
             losses = forward_pass(x, y_reg, y_dontcare)
         else:
             x, y_reg = next(iterator_train)
@@ -127,7 +128,7 @@ def gogo_valid():
                         desc='Valid ep%d' % ith_epoch, position=2):
             with torch.no_grad():
                 if args.y_step > 1 and args.ori_res_loss:
-                    x, y_reg, y_dontcare = next(iterator_valid)
+                    x, y_reg, y_cor, y_dontcare = next(iterator_valid)
                     losses = forward_pass(x, y_reg, y_dontcare)
                 else:
                     x, y_reg = next(iterator_valid)
@@ -151,7 +152,6 @@ if __name__ == '__main__':
     print('=' * 60)
 
     # Start training
-    args.cur_iter = 0
     for ith_epoch in trange(1, args.epochs + 1, desc='Epoch', unit='ep'):
         gogo_train()
         gogo_valid()

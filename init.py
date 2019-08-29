@@ -53,7 +53,7 @@ def init(args):
     net = Model(**model_kwargs).to(device)
     assert -1 <= args.freeze_earlier_blocks and args.freeze_earlier_blocks <= 4
     if args.freeze_earlier_blocks != -1:
-        b0, b1, b2, b3, b4 = net.list_blocks()
+        b0, b1, b2, b3, b4 = net.feature_extractor.list_blocks()
         blocks = [b0, b1, b2, b3, b4]
         for i in range(args.freeze_earlier_blocks + 1):
             print('Freeze block%d' % i)
@@ -62,6 +62,10 @@ def init(args):
                     param.requires_grad = False
 
     # Create optimizer
+    args.warmup_iters = args.warmup_epochs * len(loader_train)
+    args.max_iters = args.epochs * len(loader_train)
+    args.running_lr = args.warmup_lr if args.warmup_epochs > 0 else args.lr
+    args.cur_iter = 0
     optimizer = getattr(optim, args.optimizer)(
         filter(lambda p: p.requires_grad, net.parameters()),
         lr=args.lr,
