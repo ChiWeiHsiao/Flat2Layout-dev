@@ -45,12 +45,12 @@ def forward_pass(x, y_reg, y_dontcare=None):
         losses['total'] = ((y_reg_ - y_reg)**2).sum() / total_pixel
     elif args.loss == 'berhu':
         l1 = (y_reg_ - y_reg).abs()
-        T = l1.max().item() * 0.2
+        T = args.huber_const
         l2 = ((y_reg_ - y_reg)**2 + T**2) / (2 * T)
         losses['total'] = torch.where(l1 <= T, l1, l2).sum() / total_pixel
     elif args.loss == 'huber':
         l1 = (y_reg_ - y_reg).abs()
-        T = l1.max().item() * 0.2
+        T = args.huber_const
         l2 = ((y_reg_ - y_reg)**2 + T**2) / (2 * T)
         losses['total'] = torch.where(l1 <= T, l2, l1).sum() / total_pixel
     else:
