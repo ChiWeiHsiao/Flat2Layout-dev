@@ -45,7 +45,7 @@ def forward_pass(x, y_reg, y_cor, y_dontcare=None):
     losses['total'] = 0
     if args.pred_cor:
         losses['y_cor'] = F.binary_cross_entropy_with_logits(y_cor_, y_cor, reduction='mean',
-                pos_weight=torch.FloatTensor([args.pos_weight_cor]))
+                pos_weight=torch.FloatTensor([args.pos_weight_cor]).to(device))
         losses['total'] += args.weight_cor * losses['y_cor']
 
     total_pixel = np.prod(y_reg.shape)
