@@ -42,6 +42,7 @@ def forward_pass(x, y_reg, y_cor, y_dontcare=None):
             y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2
 
     # Compute loss
+    losses['total'] = 0
     if args.pred_cor:
         losses['y_cor'] = F.binary_cross_entropy_with_logits(y_cor_, y_cor, reduction='mean',
                 pos_weight=torch.FloatTensor([args.pos_weight_cor]))
