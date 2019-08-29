@@ -33,14 +33,9 @@ def forward_pass(x, y_reg, y_dontcare=None):
             y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2
 
     total_pixel = np.prod(y_reg.shape)
-    #  dontcare = (
-        #  (y_reg_ < -1) & (y_reg < -1) |\
-        #  (y_reg_ > 1) & (y_reg > 1)
-    #  )
 
     if args.loss == 'l1':
         losses['total'] = (y_reg_ - y_reg).abs().sum() / total_pixel
-        #  losses['total'] = (y_reg_ - y_reg)[~dontcare].abs().sum() / total_pixel
     elif args.loss == 'l2':
         losses['total'] = ((y_reg_ - y_reg)**2).sum() / total_pixel
     elif args.loss == 'berhu':
