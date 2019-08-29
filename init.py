@@ -7,6 +7,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 import model
 import model_HorizonNet
+from utils import group_weight
 from dataset import FlatLayoutDataset
 
 
@@ -69,7 +70,7 @@ def init(args):
     args.running_lr = args.warmup_lr if args.warmup_epochs > 0 else args.lr
     args.cur_iter = 0
     optimizer = getattr(optim, args.optimizer)(
-        filter(lambda p: p.requires_grad, net.parameters()),
+        group_weight(net),
         lr=args.lr,
         weight_decay=args.weight_decay
     )

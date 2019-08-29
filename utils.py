@@ -3,6 +3,7 @@ from math import sqrt
 from collections import OrderedDict
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 import model
@@ -103,6 +104,45 @@ def adjust_learning_rate(optimizer, args):
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = args.running_lr
+
+
+def group_weight(module):
+    # Group module parameters into two group
+    # One need weight_decay and the other doesn't
+    group_decay = []
+    group_no_decay = []
+    for m in module.modules():
+        if isinstance(m, nn.Linear):
+            group_decay.append(m.weight)
+            if m.bias is not None:
+                group_no_decay.append(m.bias)
+        elif isinstance(m, nn.modules.conv._ConvNd):
+            group_decay.append(m.weight)
+            if m.bias is not None:
+                group_no_decay.append(m.bias)
+        elif isinstance(m, nn.modules.batchnorm._BatchNorm):
+            if m.weight is not None:
+                group_no_decay.append(m.weight)
+            if m.bias is not None:
+                group_no_decay.append(m.bias)
+        elif isinstance(m, nn.GroupNorm):
+            if m.weight is not None:
+                group_no_decay.append(m.weight)
+            if m.bias is not None:
+                group_no_decay.append(m.bias)
+        elif isinstance(m, nn.RNNBase):
+            for name, ps in m.named_parameters():
+                if 'bias' in name:
+                    group_no_decay.append(ps)
+                else:
+                    group_decay.append(ps)
+    assert len(list(module.parameters())) == len(group_decay) + len(group_no_decay)
+    
+    # Remove weights dont requires grad
+    group_decay = [p for p in group_decay if p.requires_grad]
+    group_no_decay = [p for p in group_no_decay if p.requires_grad]
+    
+    return [dict(params=group_decay), dict(params=group_no_decay, weight_decay=.0)]
 
 
 if __name__ == '__main__':
