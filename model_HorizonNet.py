@@ -222,12 +222,13 @@ class HorizonNet(nn.Module):
 
 
 class LowResHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, pred_cor=True, init_bias=[-0.5, 0.5, -3, -3]):
+    def __init__(self, backbone, use_rnn=True, pred_cor=False, init_bias=[-0.5, 0.5, -3, -3]):
         super(LowResHorizonNet, self).__init__()
         if pred_cor:
             self.out_c = 4  # y1,y2,c1,c2
         else:
             self.out_c = 2  # y1,y2
+
         self.backbone = backbone
         self.use_rnn = use_rnn
         self.rnn_hidden_size = 256
