@@ -30,6 +30,9 @@ if __name__ == '__main__':
     os.makedirs(args.out, exist_ok=True)
     device = torch.device('cuda')
 
+    #  for i in range(30, 100, 5):
+        #  args.pth = os.path.join(os.path.dirname(args.pth), 'epoch_%d.pth' %i)
+        #  print(args.pth)
     net, kwargs = load_trained_model(args.pth)
     net = net.to(device)
     net.eval()
@@ -50,6 +53,8 @@ if __name__ == '__main__':
         else:
             raise Exception('%s found !??' % path)
 
+        #  if gt['img_name'][ith] != 'sun_ahwzhlaeygrdxnzd':
+            #  continue
         corner_c = np.array(gt['ceiling_corner'][ith]).reshape(-1, 2)
         corner_f = np.array(gt['floor_corner'][ith]).reshape(-1, 2)
         corner_cw = np.array(gt['ceiling_wall'][ith]).reshape(-1, 2)
@@ -77,5 +82,6 @@ if __name__ == '__main__':
             plt.plot(x_coord, np_reg[0] * h, 'g-')
             plt.plot(x_coord, np_reg[1] * h, 'b-')
         plt.savefig(os.path.join(args.out, gt['img_name'][ith] + '.rgb.png'))
+        #  plt.savefig(os.path.join(args.out, gt['img_name'][ith] + str(i) + '.rgb.png'))
         plt.clf()
 
