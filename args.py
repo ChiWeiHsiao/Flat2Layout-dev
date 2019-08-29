@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument('--guide_gain', default=0, type=int)
     parser.add_argument('--y_step', default=1, type=int, help='resample y from [B,C,W] to [B,C,W/y_step]')
     parser.add_argument('--ori_res_loss', default=False, type=bool, help='output low resolution, compute loss at full res')
+    parser.add_argument('--weight_cor', default=1, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
+    parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     # Model related
     parser.add_argument('--net')
     parser.add_argument('--backbone', default='resnext50_32x4d')
@@ -48,6 +50,7 @@ def parse_args():
     parser.add_argument('--init_bias', nargs='*', type=float)
     parser.add_argument('--freeze_earlier_blocks', type=int)
     parser.add_argument('--freeze_bn', type=int)
+    parser.add_argument('--pred_cor', default=False, type=bool, help='let model predict corner or not')
     # Dataset related
     parser.add_argument('--flip', type=int, help='use flip augmentation')
     parser.add_argument('--gamma', type=int, help='use gamma augmentation')

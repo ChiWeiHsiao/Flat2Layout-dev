@@ -50,6 +50,8 @@ def init(args):
         model_kwargs['backbone'] = args.backbone
     if args.dilate_scale:
         model_kwargs['dilate_scale'] = args.dilate_scale
+    if args.pred_cor:
+        model_kwargs['pred_cor'] = args.pred_cor
     net = Model(**model_kwargs).to(device)
     assert -1 <= args.freeze_earlier_blocks and args.freeze_earlier_blocks <= 4
     if args.freeze_earlier_blocks != -1:

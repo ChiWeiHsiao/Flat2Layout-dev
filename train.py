@@ -10,18 +10,27 @@ from init import init
 from utils import save_model, adjust_learning_rate
 
 
-def forward_pass(x, y_reg, y_dontcare=None):
+def forward_pass(x, y_reg, y_cor, y_dontcare=None):
     x = x.to(device)
     y_reg = y_reg.to(device)
+    y_cor = y_cor.to(device)
 
     # Encoder batch forward => feature pyramid
     losses = {}
-    y_reg_ = net(x)
+    if args.pred_cor:
+        y_reg_, y_cor_ = net(x)
+    else:
+        y_reg_ = net(x)
 
-    # model predict at low resolution
+
+    # Resize GT/pred if model predict at low resolution
     if args.y_step > 1:
+        # downsample GT y_cor s.t. compute loss at low resolution
+        B, C, W = y_cor.shape
+        y_cor = y_cor.reshape([B, C, W//args.y_step, args.y_step] )
+        y_cor = y_cor.sum(3)
         if args.ori_res_loss:
-            # upsample model pred s.t. compute loss at full resolution
+            # upsample Pred y_reg_ s.t. compute loss at full resolution
             ori_w = y_reg.shape[2]
             y_reg_ = F.interpolate(y_reg_, size=ori_w, mode='linear', align_corners=False)
             # dontcare: corners, two sides
@@ -29,27 +38,33 @@ def forward_pass(x, y_reg, y_dontcare=None):
             y_reg_ = y_reg_[~y_dontcare]
             y_reg = y_reg[~y_dontcare]
         else:
-            # downsample gt s.t. compute loss at low resolution
+            # downsample GT y_reg s.t. compute loss at low resolution
             y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2
 
-    total_pixel = np.prod(y_reg.shape)
+    # Compute loss
+    if args.pred_cor:
+        losses['y_cor'] = F.binary_cross_entropy_with_logits(y_cor_, y_cor, reduction='mean',
+                pos_weight=torch.FloatTensor([args.pos_weight_cor]))
+        losses['total'] += args.weight_cor * losses['y_cor']
 
+    total_pixel = np.prod(y_reg.shape)
     if args.loss == 'l1':
-        losses['total'] = (y_reg_ - y_reg).abs().sum() / total_pixel
+        losses['y_reg'] = (y_reg_ - y_reg).abs().sum() / total_pixel
     elif args.loss == 'l2':
-        losses['total'] = ((y_reg_ - y_reg)**2).sum() / total_pixel
+        losses['y_reg'] = ((y_reg_ - y_reg)**2).sum() / total_pixel
     elif args.loss == 'berhu':
         l1 = (y_reg_ - y_reg).abs()
         T = args.huber_const
         l2 = ((y_reg_ - y_reg)**2 + T**2) / (2 * T)
-        losses['total'] = torch.where(l1 <= T, l1, l2).sum() / total_pixel
+        losses['y_reg'] = torch.where(l1 <= T, l1, l2).sum() / total_pixel
     elif args.loss == 'huber':
         l1 = (y_reg_ - y_reg).abs()
         T = args.huber_const
         l2 = ((y_reg_ - y_reg)**2 + T**2) / (2 * T)
-        losses['total'] = torch.where(l1 <= T, l2, l1).sum() / total_pixel
+        losses['y_reg'] = torch.where(l1 <= T, l2, l1).sum() / total_pixel
     else:
         raise NotImplementedError()
+    losses['total'] += losses['y_reg']
 
     if args.lap_order:
         inplane = (y_reg > -1) & (y_reg < 1)
@@ -104,10 +119,10 @@ def gogo_train():
         args.cur_iter += 1
         if args.y_step > 1 and args.ori_res_loss:
             x, y_reg, y_cor, y_dontcare = next(iterator_train)
-            losses = forward_pass(x, y_reg, y_dontcare)
+            losses = forward_pass(x, y_reg, y_cor, y_dontcare)
         else:
-            x, y_reg = next(iterator_train)
-            losses = forward_pass(x, y_reg)
+            x, y_reg, y_cor = next(iterator_train)
+            losses = forward_pass(x, y_reg, y_cor)
         for k, v in losses.items():
             k = 'train/%s' % k
             tb_writer.add_scalar(k, v.item(), args.cur_iter)
@@ -129,10 +144,10 @@ def gogo_valid():
             with torch.no_grad():
                 if args.y_step > 1 and args.ori_res_loss:
                     x, y_reg, y_cor, y_dontcare = next(iterator_valid)
-                    losses = forward_pass(x, y_reg, y_dontcare)
+                    losses = forward_pass(x, y_reg, y_cor, y_dontcare)
                 else:
-                    x, y_reg = next(iterator_valid)
-                    losses = forward_pass(x, y_reg)
+                    x, y_reg, y_cor = next(iterator_valid)
+                    losses = forward_pass(x, y_reg, y_cor)
             valid_num += x.size(0)
             for k, v in losses.items():
                 valid_loss[k] = valid_loss.get(k, 0) + v.item() * x.size(0)

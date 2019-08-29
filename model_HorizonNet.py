@@ -177,10 +177,10 @@ class HorizonNet(nn.Module):
             self.drop_out = nn.Dropout(0.5)
             self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
                                     out_features=self.out_c * self.step_cols)
-            self.linear.bias.data[0:4].fill_(init_bias[0])
-            self.linear.bias.data[4:8].fill_(init_bias[1])
+            self.linear.bias.data[0*self.step_cols:1*self.step_cols].fill_(init_bias[0])
+            self.linear.bias.data[1*self.step_cols:2*self.step_cols].fill_(init_bias[1])
             if self.out_c == 3:
-                self.linear.bias.data[8:12].fill_(init_bias[2])  # c:-1
+                self.linear.bias.data[2*self.step_cols:3*self.step_cols].fill_(init_bias[2])  # c:-1
         else:
             self.linear = nn.Sequential(
                 nn.Linear(c_last, self.rnn_hidden_size),
@@ -188,10 +188,10 @@ class HorizonNet(nn.Module):
                 nn.Dropout(0.5),
                 nn.Linear(self.rnn_hidden_size, self.out_c * self.step_cols),
             )
-            self.linear[-1].bias.data[0:4].fill_(init_bias[0])
-            self.linear[-1].bias.data[4:8].fill_(init_bias[1])
+            self.linear[-1].bias.data[0*self.step_cols:1*self.step_cols].fill_(init_bias[0])
+            self.linear[-1].bias.data[1*self.step_cols:2*self.step_cols].fill_(init_bias[1])
             if self.out_c == 3:
-                self.linear[-1].bias.data[8:12].fill_(init_bias[2])  # c:-1
+                self.linear[-1].bias.data[2*self.step_cols:3*self.step_cols].fill_(init_bias[2])  # c:-1
 
     def forward(self, x):
         conv_list = self.feature_extractor(x)
@@ -220,13 +220,16 @@ class HorizonNet(nn.Module):
 
         #  return bon, cor
 
+
 class LowResHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, init_bias=[-0.5, 0.5]):
+    def __init__(self, backbone, use_rnn=True, pred_cor=True, init_bias=[-0.5, 0.5, -3, -3]):
         super(LowResHorizonNet, self).__init__()
-        self.out_c = 2  # 2=y1,y2 3=y1,y2,c
+        if pred_cor:
+            self.out_c = 4  # y1,y2,c1,c2
+        else:
+            self.out_c = 2  # y1,y2
         self.backbone = backbone
         self.use_rnn = use_rnn
-        self.step_cols = 1
         self.rnn_hidden_size = 256
 
         # Encoder
@@ -261,22 +264,24 @@ class LowResHorizonNet(nn.Module):
                                   bidirectional=True)
             self.drop_out = nn.Dropout(0.5)
             self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
-                                    out_features=self.out_c * self.step_cols)
-            self.linear.bias.data[0:4].fill_(init_bias[0])
-            self.linear.bias.data[4:8].fill_(init_bias[1])
-            if self.out_c == 3:
-                self.linear.bias.data[8:12].fill_(init_bias[2])  # c:-1
+                                    out_features=self.out_c)
+            self.linear.bias.data[0].fill_(init_bias[0])
+            self.linear.bias.data[1].fill_(init_bias[1])
+            if self.out_c == 4:
+                self.linear.bias.data[2].fill_(init_bias[2])
+                self.linear.bias.data[3].fill_(init_bias[3])
         else:
             self.linear = nn.Sequential(
                 nn.Linear(c_last, self.rnn_hidden_size),
                 nn.ReLU(inplace=True),
                 nn.Dropout(0.5),
-                nn.Linear(self.rnn_hidden_size, self.out_c * self.step_cols),
+                nn.Linear(self.rnn_hidden_size, self.out_c),
             )
-            self.linear[-1].bias.data[0:4].fill_(init_bias[0])
-            self.linear[-1].bias.data[4:8].fill_(init_bias[1])
+            self.linear[-1].bias.data[0].fill_(init_bias[0])
+            self.linear[-1].bias.data[1].fill_(init_bias[1])
             if self.out_c == 3:
-                self.linear[-1].bias.data[8:12].fill_(init_bias[2])  # c:-1
+                self.linear[-1].bias.data[2].fill_(init_bias[2])
+                self.linear[-1].bias.data[3].fill_(init_bias[3])
 
     def forward(self, x):
         conv_list = self.feature_extractor(x)
@@ -288,26 +293,29 @@ class LowResHorizonNet(nn.Module):
             feature = feature.permute(2, 0, 1)  # [w, b, c*h]
             output, hidden = self.bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
             output = self.drop_out(output)
-            output = self.linear(output)  # [seq_len, b, 3 * step_cols]
-            output = output.view(output.shape[0], output.shape[1], self.out_c, self.step_cols)  # [seq_len, b, 3, step_cols]
-            output = output.permute(1, 2, 0, 3)  # [b, 3, seq_len, step_cols]
-            output = output.contiguous().view(output.shape[0], self.out_c, -1)  # [b, 3, seq_len*step_cols]
+            output = self.linear(output)  # [seq_len, b, 3]
+            output = output.view(output.shape[0], output.shape[1], self.out_c)  # [seq_len, b, 3]
+            output = output.permute(1, 2, 0)  # [b, 3, seq_len]
         else:
             feature = feature.permute(0, 2, 1)  # [b, w, c*h]
-            output = self.linear(feature)  # [b, w, 3 * step_cols]
-            output = output.view(output.shape[0], output.shape[1], self.out_c, self.step_cols)  # [b, w, 3, step_cols]
-            output = output.permute(0, 2, 1, 3)  # [b, 3, w, step_cols]
-            output = output.contiguous().view(output.shape[0], self.out_c, -1)  # [b, 3, w*step_cols]
+            output = self.linear(feature)  # [b, w, 3]
+            output = output.view(output.shape[0], output.shape[1], self.out_c)  # [b, w, 3]
+            output = output.permute(0, 2, 1)  # [b, 3, w]
 
-        return output
+        if self.out_c == 2:
+            return output
+        else:
+            bon = output[:, :2, :]
+            cor = output[:, 2:, :]
+            return bon, cor
 
 
 if __name__ == '__main__':
-    net = LowResHorizonNet(backbone='resnet50')
+    net = LowResHorizonNet(backbone='resnet50', pred_cor=True)
     dummy = torch.zeros(1, 3, 640, 640)
-    pred = net(dummy)
-    print('output shape w/ rnn: ', pred.shape)  # (1, 2, 20)
+    bon, cor = net(dummy)
+    print('output shape w/ rnn: ', bon.shape, cor.shape)  # (1, 2, 20)
 
-    net = LowResHorizonNet(backbone='resnet50', use_rnn=False)
+    net = LowResHorizonNet(backbone='resnet50', use_rnn=False, pred_cor=False)
     pred = net(dummy)
     print('output shape w/o rnn: ', pred.shape)
