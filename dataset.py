@@ -148,9 +148,9 @@ class FlatLayoutDataset(Dataset):
         # shape [2, W]
         S = y_step
         W = self.hw[1]
-        # Corner
-        c_xs = cc[:, 0] * self.hw[1]
-        f_xs = cf[:, 0] * self.hw[1]
+        # Corners: only use real corners, remove left right keypoints
+        c_xs = cc[1:-1, 0] * self.hw[1]
+        f_xs = cf[1:-1, 0] * self.hw[1]
 
         start = (c_xs-(S//2-0.5))//S * S + (S//2-0.5)
         stop = (c_xs-(S//2-0.5))//S * S + (S//2-0.5) + S
