@@ -63,6 +63,9 @@ def parse_args():
     # Training related
     parser.add_argument('--optimizer', type=str, default='Adam')
     parser.add_argument('--lr', type=float, help='learning rate')
+    parser.add_argument('--lr_pow', default=0.9, type=float, help='power in poly to drop LR')
+    parser.add_argument('--warmup_lr', default=1e-6, type=float, help='starting learning rate for warm up')
+    parser.add_argument('--warmup_epochs', default=0, type=int, help='numbers of warmup epochs')
     parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--epochs', type=int, help='epochs to train')
     # Misc
