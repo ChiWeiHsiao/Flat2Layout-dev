@@ -20,7 +20,8 @@ def init(args):
     dataset_train = FlatLayoutDataset(args.imgroot, args.gtpath,
                                   hw=(args.main_h, args.main_w),
                                   flip=args.flip, gamma=args.gamma,
-                                  outy_mode=args.outy_mode, outy_val=(args.outy_val_up, args.outy_val_bt))
+                                  outy_mode=args.outy_mode, outy_val=(args.outy_val_up, args.outy_val_bt),
+                                  y_step=args.y_step, gen_doncare=args.ori_res_loss)
     loader_train = DataLoader(dataset_train, args.batch_size_train,
                               shuffle=True, drop_last=True,
                               num_workers=args.num_workers,
@@ -30,7 +31,8 @@ def init(args):
         dataset_valid = FlatLayoutDataset(args.valid_imgroot, args.valid_gtpath,
                                       hw=(args.main_h, args.main_w),
                                       flip=False, gamma=False,
-                                      outy_mode=args.outy_mode)
+                                      outy_mode=args.outy_mode, outy_val=(args.outy_val_up, args.outy_val_bt),
+                                      y_step=args.y_step, gen_doncare=args.ori_res_loss)
         loader_valid = DataLoader(dataset_valid, args.batch_size_valid,
                                   shuffle=False, drop_last=False,
                                   num_workers=args.num_workers,

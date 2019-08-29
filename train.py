@@ -10,15 +10,28 @@ from init import init
 from utils import save_model
 
 
-def forward_pass(x, y_reg):
+def forward_pass(x, y_reg, y_dontcare=None):
     x = x.to(device)
-    if args.y_step:
-        y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2
     y_reg = y_reg.to(device)
 
     # Encoder batch forward => feature pyramid
     losses = {}
     y_reg_ = net(x)
+
+    # model predict at low resolution
+    if args.y_step > 1:
+        if args.ori_res_loss:
+            # upsample model pred s.t. compute loss at full resolution
+            ori_w = y_reg.shape[2]
+            y_reg_ = F.interpolate(y_reg_, size=ori_w, mode='linear', align_corners=False)
+            # dontcare: corners, two sides
+            y_dontcare = y_dontcare.to(device)
+            y_reg_ = y_reg_[~y_dontcare]
+            y_reg = y_reg[~y_dontcare]
+        else:
+            # downsample gt s.t. compute loss at low resolution
+            y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2
+
     total_pixel = np.prod(y_reg.shape)
     #  dontcare = (
         #  (y_reg_ < -1) & (y_reg < -1) |\
@@ -93,9 +106,12 @@ def gogo_train():
     for _ in trange(len(loader_train),
                     desc='Train ep%s' % ith_epoch, position=1):
         args.cur_iter += 1
-        x, y_reg = next(iterator_train)
-
-        losses = forward_pass(x, y_reg)
+        if args.y_step > 1 and args.ori_res_loss:
+            x, y_reg, y_dontcare = next(iterator_train)
+            losses = forward_pass(x, y_reg, y_dontcare)
+        else:
+            x, y_reg = next(iterator_train)
+            losses = forward_pass(x, y_reg)
         for k, v in losses.items():
             k = 'train/%s' % k
             tb_writer.add_scalar(k, v.item(), args.cur_iter)
@@ -114,9 +130,13 @@ def gogo_valid():
         valid_num = 0
         for _ in trange(len(loader_valid),
                         desc='Valid ep%d' % ith_epoch, position=2):
-            x, y_reg = next(iterator_valid)
             with torch.no_grad():
-                losses = forward_pass(x, y_reg)
+                if args.y_step > 1 and args.ori_res_loss:
+                    x, y_reg, y_dontcare = next(iterator_valid)
+                    losses = forward_pass(x, y_reg, y_dontcare)
+                else:
+                    x, y_reg = next(iterator_valid)
+                    losses = forward_pass(x, y_reg)
             valid_num += x.size(0)
             for k, v in losses.items():
                 valid_loss[k] = valid_loss.get(k, 0) + v.item() * x.size(0)

@@ -49,6 +49,7 @@ if __name__ == '__main__':
             path = path + '.png'
         else:
             raise Exception('%s found !??' % path)
+
         corner_c = np.array(gt['ceiling_corner'][ith]).reshape(-1, 2)
         corner_f = np.array(gt['floor_corner'][ith]).reshape(-1, 2)
         corner_cw = np.array(gt['ceiling_wall'][ith]).reshape(-1, 2)
@@ -67,12 +68,14 @@ if __name__ == '__main__':
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
 
         plt.imshow(rgb)
-        print('np_reg: ', np_reg.shape)
-        print('np_reg[0]: ', np_reg[0].shape)
-        print('np_reg[1]: ', np_reg[1].shape)
-        x_coord = np.arange(w, step=args.y_step)   
-        plt.plot(x_coord, np_reg[0] * h, 'g-')
-        plt.plot(x_coord, np_reg[1] * h, 'b-')
+        if args.y_step > 1:
+            x_coord = np.arange(start=args.y_step//2-0.5, stop=w, step=args.y_step)   
+            plt.plot(x_coord, np_reg[0] * h, 'go--')
+            plt.plot(x_coord, np_reg[1] * h, 'bo--')
+        else:
+            x_coord = np.arange(w)   
+            plt.plot(x_coord, np_reg[0] * h, 'g-')
+            plt.plot(x_coord, np_reg[1] * h, 'b-')
         plt.savefig(os.path.join(args.out, gt['img_name'][ith] + '.rgb.png'))
         plt.clf()
 

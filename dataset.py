@@ -82,7 +82,8 @@ def gen_1d(xys, w, missing_val, mode='constant'):
 
 class FlatLayoutDataset(Dataset):
     def __init__(self, imgroot, gtpath, hw=(512, 512),
-                 flip=False, gamma=False, outy_mode='constant', outy_val=(-1.05,1.05)):
+                 flip=False, gamma=False, outy_mode='constant', outy_val=(-1.05,1.05),
+                 y_step=1, gen_doncare=False):
         gt = np.load(gtpath)
         self.gt_path = []
         for name in gt['img_name']:
@@ -104,6 +105,8 @@ class FlatLayoutDataset(Dataset):
         self.gamma = gamma
         self.outy_mode = outy_mode
         self.outy_val = outy_val
+        self.y_step = y_step
+        self.gen_doncare = gen_doncare
 
     def __len__(self):
         return len(self.gt_path)
@@ -134,7 +137,44 @@ class FlatLayoutDataset(Dataset):
         # To tensor
         x = torch.FloatTensor(rgb.transpose(2, 0, 1).copy())
         y_reg = torch.FloatTensor([u_1d, d_1d])
-        return x, y_reg
+
+        if self.y_step > 1 and self.gen_doncare:
+            y_dontcare = self._gen_doncare_mask(cc, cf, self.y_step)
+            return x, y_reg, y_dontcare
+        else:
+            return x, y_reg
+
+    def _gen_doncare_mask(self, cc, cf, y_step):
+        # shape [2, W]
+        S = y_step
+        W = self.hw[1]
+        # Corner
+        c_xs = cc[:, 0] * self.hw[1]
+        f_xs = cf[:, 0] * self.hw[1]
+
+        start = (c_xs-(S//2-0.5))//S * S + (S//2-0.5)
+        stop = (c_xs-(S//2-0.5))//S * S + (S//2-0.5) + S
+        start = np.clip(np.ceil(start).astype(int), a_min=0, a_max=W)
+        stop = np.clip(np.ceil(stop).astype(int), a_min=0, a_max=W)
+        c_mask = np.zeros(W, dtype=np.bool)
+        for i in range(len(c_xs)):
+            c_mask[start[i] : stop[i]] = True
+
+        start = (f_xs-(S//2-0.5))//S * S + (S//2-0.5)
+        stop = (f_xs-(S//2-0.5))//S * S + (S//2-0.5) + S
+        start = np.clip(np.ceil(start).astype(int), a_min=0, a_max=W)
+        stop = np.clip(np.ceil(stop).astype(int), a_min=0, a_max=W)
+        f_mask = np.zeros(W , dtype=np.bool)
+        for i in range(len(f_xs)):
+            f_mask[start[i] : stop[i]] = True
+
+        mask = np.vstack([c_mask, f_mask])
+
+        # Leftmost and rightmost
+        mask[:, :S//2] = True
+        mask[:, -S//2:] = True
+        return mask
+
 
     def _final_normalize(self, rgb, *corners_lst):
         # Rescale image to fix size
@@ -167,18 +207,20 @@ if __name__ == '__main__':
     args = parser.parse_args()
     os.makedirs('vis/dataset', exist_ok=True)
 
-    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, flip=True, outy_mode='linear')
+    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, flip=True, outy_mode='linear',
+                                y_step=32, gen_doncare=True)
 
     #  ed, ey = find_invalid_data(args.gtpath)
     for i in trange(len(dataset)):
         #  error_lst = ed + ey
         #  if dataset.gt_path[i].split('/')[-1][:-4] not in error_lst:
             #  continue
-        try:
-            x, y_reg = dataset[i]
-        except:
-            print('\n'*5)
-            print('Error: ', dataset.gt_path[i].split('/')[-1][:-4])
+
+        #  x, y_reg = dataset[i]
+        x, y_reg, y_dontcare = dataset[i]
+        y_reg[0, y_dontcare[0]] = -1.5
+        y_reg[1, y_dontcare[1]] = 1.5
+
         rgb = undo_normalize_rgb(x.permute(1, 2, 0).numpy())
         u_1d, d_1d = y_reg.numpy()
 
