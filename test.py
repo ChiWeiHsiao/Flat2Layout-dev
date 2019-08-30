@@ -78,12 +78,12 @@ if __name__ == '__main__':
             if isinstance(output, tuple):
                 out_reg, out_cor = output
                 # plot ceil,floor corners at the bottom of image
-                u_cor, d_cor = out_cor.cpu().numpy().repeat(args.y_step, axis=1)
+                u_cor, d_cor = out_cor.cpu().numpy()[0].repeat(args.y_step, axis=-1)
                 u_cor = u_cor.reshape([1,-1]).repeat(5, axis=0)
                 d_cor = d_cor.reshape([1,-1]).repeat(5, axis=0)
-                u_cor = u_cor.reshape([5, ori_w, 1]).repeat(3, axis=2)
-                d_cor = d_cor.reshape([5, ori_w, 1]).repeat(3, axis=2)
-                redline = np.zeros([1, ori_w, 3])
+                u_cor = u_cor.reshape([5, w, 1]).repeat(3, axis=2)
+                d_cor = d_cor.reshape([5, w, 1]).repeat(3, axis=2)
+                redline = np.zeros([1, w, 3])
                 redline[..., 0] += 1
                 rgb = np.vstack([rgb, u_cor, redline, d_cor])
             else:
