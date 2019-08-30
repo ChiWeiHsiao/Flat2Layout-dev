@@ -49,6 +49,8 @@ def init(args):
     model_kwargs = {'init_bias': args.init_bias}
     if args.backbone:
         model_kwargs['backbone'] = args.backbone
+    if args.bn_momentum:
+        model_kwargs['bn_momentum'] = args.bn_momentum
     if args.dilate_scale:
         model_kwargs['dilate_scale'] = args.dilate_scale
     if args.pred_cor != None:

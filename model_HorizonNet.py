@@ -6,10 +6,13 @@ import torch.nn.functional as F
 import torchvision.models as models
 import functools
 
+import model_ADE20k_encoder
+
 
 ENCODER_RESNET = [
     'resnet18', 'resnet34', 'resnet50', 'resnet101', 'resnet152',
-    'resnext50_32x4d', 'resnext101_32x8d'
+    'resnext50_32x4d', 'resnext101_32x8d',
+    'ade20k_resnet50'
 ]
 ENCODER_DENSENET = [
     'densenet121', 'densenet169', 'densenet161', 'densenet201'
@@ -88,6 +91,10 @@ class ConvCompressH(nn.Module):
             nn.BatchNorm2d(out_c),
             nn.ReLU(inplace=True),
         )
+        n = self.layers[0].kernel_size[0] * self.layers[0].kernel_size[1] * self.layers[0].out_channels
+        self.layers[0].weight.data.normal_(0, np.sqrt(2. / n))
+        self.layers[1].weight.data.fill_(1)
+        self.layers[1].bias.data.zero_()
 
     def forward(self, x):
         return self.layers(x)
@@ -222,7 +229,7 @@ class HorizonNet(nn.Module):
 
 
 class LowResHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, pred_cor=False, init_bias=[-0.5, 0.5, -3, -3]):
+    def __init__(self, backbone, use_rnn=True, pred_cor=False, init_bias=[-0.5, 0.5, -3, -3], bn_momentum=None):
         super(LowResHorizonNet, self).__init__()
         if pred_cor:
             self.out_c = 4  # y1,y2,c1,c2
@@ -238,6 +245,8 @@ class LowResHorizonNet(nn.Module):
             self.feature_extractor = Resnet(backbone, pretrained=True)
         elif backbone.startswith('dense'):
             self.feature_extractor = Densenet(backbone, pretrained=True)
+        elif backbone == 'ade20k_resnet50':
+            self.feature_extractor = model_ADE20k_encoder.resnet50()
         else:
             raise NotImplementedError()
 
@@ -283,6 +292,11 @@ class LowResHorizonNet(nn.Module):
             if self.out_c == 3:
                 self.linear[-1].bias.data[2].fill_(init_bias[2])
                 self.linear[-1].bias.data[3].fill_(init_bias[3])
+
+        if bn_momentum is not None:
+            for m in self.modules():
+                isinstance(m, nn.modules.batchnorm._BatchNorm):
+                    m.momentum = bn_momentum
 
     def forward(self, x):
         conv_list = self.feature_extractor(x)
