@@ -69,7 +69,21 @@ if __name__ == '__main__':
 
         # Prepare output
         with torch.no_grad():
-            out_reg = net(x[None])
+            #  out_reg = net(x[None])
+            output = net(x[None])
+            if isinstance(output, tuple):
+                out_reg, out_cor = output
+                # plot ceil,floor corners at the bottom of image
+                u_cor, d_cor = out_cor.cpu().numpy().repeat(args.y_step, axis=1)
+                u_cor = u_cor.reshape([1,-1]).repeat(5, axis=0)
+                d_cor = d_cor.reshape([1,-1]).repeat(5, axis=0)
+                u_cor = u_cor.reshape([5, ori_w, 1]).repeat(3, axis=2)
+                d_cor = d_cor.reshape([5, ori_w, 1]).repeat(3, axis=2)
+                redline = np.zeros([1, ori_w, 3])
+                redline[..., 0] += 1
+                rgb = np.vstack([rgb, u_cor, redline, d_cor])
+            else:
+                out_reg = output
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
 
         plt.imshow(rgb)
