@@ -295,7 +295,7 @@ class LowResHorizonNet(nn.Module):
 
         if bn_momentum is not None:
             for m in self.modules():
-                isinstance(m, nn.modules.batchnorm._BatchNorm):
+                if isinstance(m, nn.modules.batchnorm._BatchNorm):
                     m.momentum = bn_momentum
 
     def forward(self, x):
