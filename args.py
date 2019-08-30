@@ -45,6 +45,7 @@ def parse_args():
     parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     # Model related
     parser.add_argument('--net')
+    parser.add_argument('--bn_momentum', type=float)
     parser.add_argument('--backbone', default='resnext50_32x4d')
     parser.add_argument('--dilate_scale', type=int)
     parser.add_argument('--init_bias', nargs='*', type=float)
