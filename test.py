@@ -26,9 +26,13 @@ if __name__ == '__main__':
     parser.add_argument('--y_step', type=int, default=1)
     parser.add_argument('--imgroot', default='datas/lsun/images')
     parser.add_argument('--gtpath', default='datas/lsun/validation.npz')
+    parser.add_argument('--no_cuda', action='store_true')
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
-    device = torch.device('cuda')
+    if args.no_cuda:
+        device = torch.device('cpu')
+    else:
+        device = torch.device('cuda')
 
     #  for i in range(30, 100, 5):
         #  args.pth = os.path.join(os.path.dirname(args.pth), 'epoch_%d.pth' %i)
