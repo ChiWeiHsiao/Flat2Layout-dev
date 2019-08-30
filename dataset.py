@@ -222,7 +222,9 @@ if __name__ == '__main__':
     os.makedirs('vis/dataset', exist_ok=True)
 
     YSTEP = 32
-    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640), flip=True, outy_mode='linear', outy_val=(-1.1,1.1),
+    OUTY_MODE = 'constant'
+    #  OUTY_MODE = 'linear'
+    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640), flip=True, outy_mode=OUTY_MODE, outy_val=(-1.1,1.1),
                                 y_step=YSTEP, gen_doncare=True)
 
     #  ed, ey = find_invalid_data(args.gtpath)
@@ -242,9 +244,10 @@ if __name__ == '__main__':
         d_1d_xs = np.where(d_1d_corner)[0]
 
         plt.imshow(rgb)
-        # plot y_reg
+       # plot y_reg
         plt.plot(np.arange(rgb.shape[1]), (u_1d / 2 + 0.5) * rgb.shape[0], 'b-')
         plt.plot(np.arange(rgb.shape[1]), (d_1d / 2 + 0.5) * rgb.shape[0], 'g-')
+
         # plot low resolution reg
         if YSTEP > 1:
             lowr_y_reg = (y_reg[:, YSTEP//2-1::YSTEP] + y_reg[:, YSTEP//2::YSTEP])/2
@@ -253,6 +256,14 @@ if __name__ == '__main__':
             lowr_x_cor = (x_cor[YSTEP//2-1::YSTEP] + x_cor[YSTEP//2::YSTEP])/2
             plt.plot(lowr_x_cor, (lowr_u_1d / 2 + 0.5) * rgb.shape[0], 'bo')
             plt.plot(lowr_x_cor, (lowr_d_1d / 2 + 0.5) * rgb.shape[0], 'go')
+        # plot high resolution reg upsapled from low resolution reg 
+        if YSTEP > 1:
+            ori_w = y_reg.shape[1]
+            upsample_y_reg = F.interpolate(lowr_y_reg.reshape([1,2,-1]), size=ori_w, mode='linear', align_corners=False)
+            upsample_y_reg = upsample_y_reg.reshape([2, -1])
+            upsample_u_1d, upsample_d_1d = upsample_y_reg.numpy()
+            plt.plot(np.arange(rgb.shape[1]), (upsample_u_1d / 2 + 0.5) * rgb.shape[0], 'r-')
+            plt.plot(np.arange(rgb.shape[1]), (upsample_d_1d / 2 + 0.5) * rgb.shape[0], 'r-')
         # plot doncare
         x_cor = np.arange(rgb.shape[1])
         u_1d, d_1d = y_reg.numpy()
