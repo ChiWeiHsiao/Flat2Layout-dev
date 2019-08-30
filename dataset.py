@@ -221,8 +221,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     os.makedirs('vis/dataset', exist_ok=True)
 
-    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, flip=True, outy_mode='linear',
-                                y_step=32, gen_doncare=True)
+    YSTEP = 32
+    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640), flip=True, outy_mode='linear', outy_val=(-1.1,1.1),
+                                y_step=YSTEP, gen_doncare=True)
 
     #  ed, ey = find_invalid_data(args.gtpath)
     for i in trange(len(dataset)):
@@ -232,8 +233,6 @@ if __name__ == '__main__':
 
         #  x, y_reg = dataset[i]
         x, y_reg, y_cor, y_dontcare = dataset[i]
-        y_reg[0, y_dontcare[0]] = -1.5
-        y_reg[1, y_dontcare[1]] = 1.5
 
         rgb = np.clip(undo_normalize_rgb(x.permute(1, 2, 0).numpy()), 0, 1)
         u_1d, d_1d = y_reg.numpy()
@@ -243,8 +242,23 @@ if __name__ == '__main__':
         d_1d_xs = np.where(d_1d_corner)[0]
 
         plt.imshow(rgb)
+        # plot y_reg
         plt.plot(np.arange(rgb.shape[1]), (u_1d / 2 + 0.5) * rgb.shape[0], 'b-')
         plt.plot(np.arange(rgb.shape[1]), (d_1d / 2 + 0.5) * rgb.shape[0], 'g-')
+        # plot low resolution reg
+        if YSTEP > 1:
+            lowr_y_reg = (y_reg[:, YSTEP//2-1::YSTEP] + y_reg[:, YSTEP//2::YSTEP])/2
+            lowr_u_1d, lowr_d_1d = lowr_y_reg.numpy()
+            x_cor = np.arange(rgb.shape[1])
+            lowr_x_cor = (x_cor[YSTEP//2-1::YSTEP] + x_cor[YSTEP//2::YSTEP])/2
+            plt.plot(lowr_x_cor, (lowr_u_1d / 2 + 0.5) * rgb.shape[0], 'bo')
+            plt.plot(lowr_x_cor, (lowr_d_1d / 2 + 0.5) * rgb.shape[0], 'go')
+        # plot doncare
+        x_cor = np.arange(rgb.shape[1])
+        u_1d, d_1d = y_reg.numpy()
+        plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
+        plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
+
         plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
         plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')
         plt.savefig('vis/dataset/%s.vis.png' % (dataset.gt_path[i].split('/')[-1][:-4]))
