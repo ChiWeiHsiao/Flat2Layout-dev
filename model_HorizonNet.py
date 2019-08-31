@@ -320,7 +320,6 @@ class LowResHorizonNet(nn.Module):
             ])
             i, j = 0, 0
             for v in init_bias:
-                print(i, j, v)
                 self.linear[i][-1].bias.data[j].fill_(v)
                 j += 1
                 if j >= len(self.linear[i][-1].bias.data):
@@ -354,12 +353,11 @@ class LowResHorizonNet(nn.Module):
             output = output.view(output.shape[0], output.shape[1], self.out_c)  # [b, w, 3]
             output = output.permute(0, 2, 1)  # [b, 3, w]
         else:
-            feature = feature.permute(0, 2, 1)  # [b, w, c*h]
-            branches = [f(feature) for f in self.reduce_height_module]
-            branches = [v.reshape(feature.shape[0], -1, feature.shape[3]) for v in branches]
+            branches = [f(last_block) for f in self.reduce_height_module]
+            branches = [v.reshape(v.shape[0], -1, v.shape[3]) for v in branches]
             branches = [v.permute(0, 2, 1) for v in branches]
             output = [f(v) for f, v in zip(self.linear, branches)]
-            output = [v.view(output.shape[0], output.shape[1], self.out_c) for v in output]
+            output = [v.view(v.shape[0], v.shape[1], self.out_c//self.branches) for v in output]
             output = [v.permute(0, 2, 1) for v in output]
             output = torch.cat(output, 1)
 
