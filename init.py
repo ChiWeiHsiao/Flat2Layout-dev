@@ -53,6 +53,8 @@ def init(args):
         model_kwargs['bn_momentum'] = args.bn_momentum
     if args.dilate_scale:
         model_kwargs['dilate_scale'] = args.dilate_scale
+    if args.branches:
+        model_kwargs['branches'] = args.branches
     model_kwargs['use_rnn'] = args.use_rnn
     model_kwargs['pred_cor'] = args.pred_cor
 

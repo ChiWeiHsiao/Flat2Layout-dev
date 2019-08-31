@@ -46,6 +46,7 @@ def parse_args():
     # Model related
     parser.add_argument('--net')
     parser.add_argument('--use_rnn', default=1, type=int)
+    parser.add_argument('--branches', type=int)
     parser.add_argument('--bn_momentum', type=float)
     parser.add_argument('--backbone', default='resnext50_32x4d')
     parser.add_argument('--dilate_scale', type=int)

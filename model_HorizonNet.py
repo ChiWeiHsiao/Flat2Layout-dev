@@ -229,8 +229,12 @@ class HorizonNet(nn.Module):
 
 
 class LowResHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn, pred_cor, init_bias=[-0.5, 0.5, -3, -3], bn_momentum=None):
+    def __init__(self, backbone, use_rnn, pred_cor,
+                 init_bias=[-0.5, 0.5, -3, -3],
+                 bn_momentum=None,
+                 branches=1):
         super(LowResHorizonNet, self).__init__()
+        assert not use_rnn or branches == 1
         if pred_cor:
             self.out_c = 4  # y1,y2,c1,c2
         else:
@@ -256,12 +260,24 @@ class LowResHorizonNet(nn.Module):
             c1, c2, c3, c4 = [b.shape[1] for b in self.feature_extractor(dummy)]
 
         # Convert features from block 4 of the encoder into B x C x 1 x W'
-        self.reduce_height_module = nn.Sequential(
-            ConvCompressH(c4, c4//2),
-            ConvCompressH(c4//2, c4//2),
-            ConvCompressH(c4//2, c4//4),
-            ConvCompressH(c4//4, c4//8),
-        )
+        self.branches = branches
+        if self.branches == 1:
+            self.reduce_height_module = nn.Sequential(
+                ConvCompressH(c4, c4//2),
+                ConvCompressH(c4//2, c4//2),
+                ConvCompressH(c4//2, c4//4),
+                ConvCompressH(c4//4, c4//8),
+            )
+        else:
+            self.reduce_height_module = nn.ModuleList([
+                nn.Sequential(
+                    ConvCompressH(c4, c4//2),
+                    ConvCompressH(c4//2, c4//2),
+                    ConvCompressH(c4//2, c4//4),
+                    ConvCompressH(c4//4, c4//8),
+                )
+                for _ in range(self.branches)
+            ])
         c_last = 2*c4//8  # h*c
 
         # 1D prediction
@@ -280,7 +296,7 @@ class LowResHorizonNet(nn.Module):
             if self.out_c == 4:
                 self.linear.bias.data[2].fill_(init_bias[2])
                 self.linear.bias.data[3].fill_(init_bias[3])
-        else:
+        elif branches == 1:
             self.linear = nn.Sequential(
                 nn.Linear(c_last, self.rnn_hidden_size),
                 nn.ReLU(inplace=True),
@@ -289,9 +305,28 @@ class LowResHorizonNet(nn.Module):
             )
             self.linear[-1].bias.data[0].fill_(init_bias[0])
             self.linear[-1].bias.data[1].fill_(init_bias[1])
-            if self.out_c == 3:
+            if self.out_c == 4:
                 self.linear[-1].bias.data[2].fill_(init_bias[2])
                 self.linear[-1].bias.data[3].fill_(init_bias[3])
+        else:
+            self.linear = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(c_last, self.rnn_hidden_size),
+                    nn.ReLU(inplace=True),
+                    nn.Dropout(0.5),
+                    nn.Linear(self.rnn_hidden_size, self.out_c//self.branches),
+                )
+                for _ in range(self.branches)
+            ])
+            i, j = 0, 0
+            for v in init_bias:
+                print(i, j, v)
+                self.linear[i][-1].bias.data[j].fill_(v)
+                j += 1
+                if j >= len(self.linear[i][-1].bias.data):
+                    i += 1
+                    j = 0
+
 
         if bn_momentum is not None:
             for m in self.modules():
@@ -302,20 +337,31 @@ class LowResHorizonNet(nn.Module):
         conv_list = self.feature_extractor(x)
         last_block = conv_list[-1]
 
-        feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
-        feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
         if self.use_rnn:
+            feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
+            feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
             feature = feature.permute(2, 0, 1)  # [w, b, c*h]
             output, hidden = self.bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
             output = self.drop_out(output)
             output = self.linear(output)  # [seq_len, b, 3]
             output = output.view(output.shape[0], output.shape[1], self.out_c)  # [seq_len, b, 3]
             output = output.permute(1, 2, 0)  # [b, 3, seq_len]
-        else:
+        elif self.branches == 1:
+            feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
+            feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
             feature = feature.permute(0, 2, 1)  # [b, w, c*h]
             output = self.linear(feature)  # [b, w, 3]
             output = output.view(output.shape[0], output.shape[1], self.out_c)  # [b, w, 3]
             output = output.permute(0, 2, 1)  # [b, 3, w]
+        else:
+            feature = feature.permute(0, 2, 1)  # [b, w, c*h]
+            branches = [f(feature) for f in self.reduce_height_module]
+            branches = [v.reshape(feature.shape[0], -1, feature.shape[3]) for v in branches]
+            branches = [v.permute(0, 2, 1) for v in branches]
+            output = [f(v) for f, v in zip(self.linear, branches)]
+            output = [v.view(output.shape[0], output.shape[1], self.out_c) for v in output]
+            output = [v.permute(0, 2, 1) for v in output]
+            output = torch.cat(output, 1)
 
         if self.out_c == 2:
             return output
