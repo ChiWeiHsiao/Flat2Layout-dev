@@ -45,13 +45,14 @@ def parse_args():
     parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     # Model related
     parser.add_argument('--net')
+    parser.add_argument('--use_rnn', default=1, type=int)
     parser.add_argument('--bn_momentum', type=float)
     parser.add_argument('--backbone', default='resnext50_32x4d')
     parser.add_argument('--dilate_scale', type=int)
     parser.add_argument('--init_bias', nargs='*', type=float)
     parser.add_argument('--freeze_earlier_blocks', type=int)
     parser.add_argument('--freeze_bn', type=int)
-    parser.add_argument('--pred_cor', default=False, type=bool, help='let model predict corner or not')
+    parser.add_argument('--pred_cor', type=int, help='let model predict corner or not')
     # Dataset related
     parser.add_argument('--flip', type=int, help='use flip augmentation')
     parser.add_argument('--gamma', type=int, help='use gamma augmentation')
