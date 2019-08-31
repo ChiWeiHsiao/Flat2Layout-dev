@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--lap_order', default=0, type=int, help='gradient form by pred. and gt.')
     parser.add_argument('--guide_gain', default=0, type=int)
     parser.add_argument('--y_step', default=1, type=int, help='resample y from [B,C,W] to [B,C,W/y_step]')
-    parser.add_argument('--ori_res_loss', default=False, type=bool, help='output low resolution, compute loss at full res')
+    parser.add_argument('--ori_res_loss', default=True, type=int, help='output low resolution, compute loss at full res')
     parser.add_argument('--weight_cor', default=1, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     # Model related
