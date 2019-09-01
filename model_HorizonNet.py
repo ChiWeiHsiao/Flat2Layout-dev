@@ -229,7 +229,7 @@ class HorizonNet(nn.Module):
 
 
 class LowResHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn, pred_cor,
+    def __init__(self, backbone, use_rnn=True, pred_cor=False,
                  init_bias=[-0.5, 0.5, -3, -3],
                  bn_momentum=None,
                  branches=1):
