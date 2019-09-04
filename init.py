@@ -48,6 +48,8 @@ def init(args):
     else:
         Model = getattr(model, args.net)
     model_kwargs = {'init_bias': args.init_bias}
+    if args.gray_mode:
+        model_kwargs['gray_mode'] = args.gray_mode
     if args.backbone:
         model_kwargs['backbone'] = args.backbone
     if args.bn_momentum:

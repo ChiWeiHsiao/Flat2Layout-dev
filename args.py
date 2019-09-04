@@ -48,6 +48,7 @@ def parse_args():
     parser.add_argument('--upsample_lr_pad', type=int)
     # Model related
     parser.add_argument('--net')
+    parser.add_argument('--gray_mode', type=int)
     parser.add_argument('--use_rnn', default=1, type=int)
     parser.add_argument('--branches', type=int)
     parser.add_argument('--bn_momentum', type=float)

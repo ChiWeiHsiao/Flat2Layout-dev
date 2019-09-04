@@ -233,7 +233,8 @@ class LowResHorizonNet(nn.Module):
                  init_bias=[-0.5, 0.5, -3, -3],
                  bn_momentum=None,
                  branches=1,
-                 finetune_cor=0):
+                 finetune_cor=0,
+                 gray_mode=0):
         super(LowResHorizonNet, self).__init__()
         assert not use_rnn or branches == 1
         assert finetune_cor == 0 or branches == 1
@@ -246,6 +247,7 @@ class LowResHorizonNet(nn.Module):
         self.use_rnn = use_rnn
         self.rnn_hidden_size = 256
         self.finetune_cor = finetune_cor
+        self.gray_mode = gray_mode
 
         # Encoder
         if backbone.startswith('res'):
@@ -354,6 +356,8 @@ class LowResHorizonNet(nn.Module):
                     m.momentum = bn_momentum
 
     def forward(self, x):
+        if self.gray_mode:
+            x = (0.2989*x[:,[0]] + 0.5870*x[:,[1]] + 0.1140*x[:,[2]]).repeat(1, 3, 1, 1)
         conv_list = self.feature_extractor(x)
         last_block = conv_list[-1]
 
