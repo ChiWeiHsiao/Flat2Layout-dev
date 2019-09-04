@@ -91,7 +91,8 @@ if __name__ == '__main__':
                 out_reg = output
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
 
-        plt.imshow(rgb)
+        #  plt.imshow(rgb)
+        plt.imshow(np.clip(rgb, 0, 1))
         if args.y_step > 1:
             x_coord = np.arange(start=args.y_step//2-0.5, stop=w, step=args.y_step)   
             plt.plot(x_coord, np_reg[0] * h, 'go--')

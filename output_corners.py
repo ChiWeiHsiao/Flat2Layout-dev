@@ -7,6 +7,7 @@ from scipy.ndimage.filters import maximum_filter
 from scipy.stats import siegelslopes
 from cohenSutherlandClip import cohenSutherlandClip
 from tqdm import trange
+from scipy.spatial.distance import cdist
 
 import torch
 import torch.nn as nn
@@ -27,15 +28,15 @@ def find_peaks(signal, winsz=3, min_v=0.05):
 
 def fit_line(xs, ys, mask):
     if len(xs) == 0:
-        return None
+        return None, None
     if mask.sum() < 2:
-        return None
+        return None, None
     xs = xs[mask]
     ys = ys[mask]
     m, b = siegelslopes(ys, xs)
     # line in homogeneous coordinate
     L = np.cross([0, 0*m+b, 1], [1, 1*m+b, 1])
-    return L
+    return L, m
 
 
 def interp_L(L, x=None, y=None):
@@ -53,7 +54,7 @@ def line_X_rectangle(L):
 
 
 def one_line_segment_case(xs, reg1d, mask):
-    L = fit_line(xs, reg1d, mask)
+    L, m = fit_line(xs, reg1d, mask)
     if L is None:
         return np.array([]).reshape(-1, 2)
     p0, p1 = line_X_rectangle(L)
@@ -84,36 +85,63 @@ def extract_corners(cor1d, reg1d, min_v=0.05):
         segments.append([pks[i-1], pks[i]+1])
 
     # Find line for each segment
-    Ls = [
-        fit_line(xs[s:t], reg1d[s:t], mask[s:t])
-        for s, t in segments
-    ]
+    Ls = []
+    ms = []
+    for s, t in segments:
+        L, m = fit_line(xs[s:t], reg1d[s:t], mask[s:t])
+        #  if np.abs(m-ms[-1]) < 0.5:
+        Ls.append(L)
+        ms.append(m)
 
     # Connect line into corners
     if len(Ls) == 2 and (Ls[0] is None or Ls[1] is None):
         print('Fall back: two segments only but at least one dont have line')
+        print(segments[0][0], reg1d[segments[0][0]])
+        print(segments[1][0], reg1d[segments[1][0]])
+        #  if np.logical_and(reg1d[mask]>=0, reg1d[mask]<=1).sum() > 0:
+            #  raise ValueError('Fall back: two segments only but at least one dont have line')
         return one_line_segment_case(xs, reg1d, mask)
     for i in range(1, len(Ls)-1):
-        assert Ls[i] is not None, 'Middle segments dont have line !??'
+        return one_line_segment_case(xs, reg1d, mask)
+        #  assert Ls[i] is not None, 'Middle segments dont have line !??'
     corners = []
     if Ls[0] is None:
         p0, p1 = line_X_rectangle(Ls[1])
         corners.append(p0)
         corners.append(p0)
+        #  raise ValueError('Ls[0] == None')
     else:
         p0, p1 = line_X_rectangle(Ls[0])
         corners.append(p0)
     
     for i in range(1, len(Ls)):
         if Ls[i-1] is None or Ls[i] is None:
+            #  print('i: ', i)
+            #  print('peak corners: ', pks)
+            #  print('Ls[i-1]: ', Ls[i-1])
+            #  print('Ls[i]: ', Ls[i])
+            #  print(segments[i][0], reg1d[segments[i][0]])
+            #  print(segments[i-1][0], reg1d[segments[i-1][0]])
+            #  raise ValueError('Ls[i-1] is None or Ls[i] is None')
             continue
         pts = np.cross(Ls[i-1], Ls[i])
-        corners.append(pts[:2] / pts[2])
+        #  corners.append(pts[:2] / pts[2])
+        # If intersection x is too far from predicted y_cor, xy=[y_cor, y_reg[y_cor]]
+        toofar = 16
+        if np.abs(N*pts[0] - pks[i]) < toofar:
+            corners.append(pts[:2] / pts[2])
+        else:
+            pred_x = pks[i]
+            #  print('intersection too far')
+            #  print('intersect:', pts[:2] / pts[2] * N)
+            #  print('new      :', [pred_x, reg1d[pred_x]*N])
+            corners.append(np.array([pred_x/N, reg1d[pred_x]]))
     
     if Ls[-1] is None:
         p0, p1 = line_X_rectangle(Ls[-2])
         corners.append(p1)
         corners.append(p1)
+        #  raise ValueError('Ls[-1] == None')
     else:
         p0, p1 = line_X_rectangle(Ls[-1])
         corners.append(p1)
@@ -123,7 +151,26 @@ def extract_corners(cor1d, reg1d, min_v=0.05):
         if c[0] is None or c[0] < -0.1 or c[0] > 1.1 or c[1] < -0.1 or c[1] > 1.1:
             return one_line_segment_case(xs, reg1d, mask)
 
+    #  # Check corners if too close, delete one
+    #  corners = np.array(corners).reshape(-1, 2)
+    #  nC = corners.shape[0]
+    #  dist = cdist(corners, corners)
+    #  dist = dist + 1e9*np.eye(nC)
+    #  amin = dist.argmin(0)
+    #  tooclose = dist[np.arange(nC), amin] < 0.016
+    #  if tooclose.sum():
+        #  print('too close, dist=: ', dist[tooclose, amin[tooclose]])
+        #  print('\nori corners:', corners*640)
+        #  for i in range(nC):
+            #  if tooclose[i]:
+                #  print('Pair ', i, 640*corners[i], 640*corners[amin[i]])
+                #  tmp_x, tmp_y = corners[i]
+                #  if tmp_x==0 or tmp_x==1 or tmp_y==0 or tmp_y==1:
+                    #  tooclose[i] = False
+        #  corners = corners[~tooclose]
+        #  print('\nnew corners:', corners*640)
     return np.array(corners).reshape(-1, 2)
+
 
 
 if __name__ == '__main__':
@@ -159,6 +206,7 @@ if __name__ == '__main__':
 
     for ith in trange(len(gt['img_name'])):
         path = os.path.join(args.imgroot, gt['img_name'][ith])
+        print(path)
         if args.debug and os.path.split(path)[1] != args.debug:
             continue
         if os.path.isfile(path):

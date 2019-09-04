@@ -92,7 +92,8 @@ def gen_1d(xys, w, missing_val, mode='constant'):
 class FlatLayoutDataset(Dataset):
     def __init__(self, imgroot, gtpath, hw=(512, 512),
                  flip=False, gamma=False, outy_mode='constant', outy_val=(-1.05,1.05),
-                 y_step=1, gen_doncare=False):
+                 y_step=1, gen_doncare=False,
+                 resize_h=False):
         gt = np.load(gtpath)
         self.gt_path = []
         for name in gt['img_name']:
@@ -116,6 +117,7 @@ class FlatLayoutDataset(Dataset):
         self.outy_val = outy_val
         self.y_step = y_step
         self.gen_doncare = gen_doncare
+        self.resize_h = resize_h
 
     def __len__(self):
         return len(self.gt_path)
@@ -135,6 +137,8 @@ class FlatLayoutDataset(Dataset):
             rgb = rgb ** p
         if self.flip and np.random.randint(2) == 1:
             rgb, cc, cf, ccw, cfw = self._flip(rgb, cc, cf, ccw, cfw)
+        if self.resize_h:
+            rgb, cc, cf, ccw, cfw = self._resize_h(rgb, cc, cf, ccw, cfw)
 
         # Finally normalize rgb and corners
         rgb, cc, cf, ccw, cfw = self._final_normalize(rgb, cc, cf, ccw, cfw)
@@ -155,6 +159,16 @@ class FlatLayoutDataset(Dataset):
             return x, y_reg, y_cor, y_dontcare
         else:
             return x, y_reg, y_cor
+
+    def _resize_h(self, rgb, *corners_lst):
+        new_rgb = np.zeros_like(rgb)
+        ori_hw = rgb.shape[:2]
+        new_hw = [int(ori_hw[0] * np.random.uniform(0.5, 1)), ori_hw[1]]
+        new_rgb[:new_hw[0]] = resize(rgb, new_hw, preserve_range=True, anti_aliasing=False, mode='reflect')
+        for cs in corners_lst:
+            cs[:, 0] *= new_hw[1] / ori_hw[1]  # Rescale x to [0, 1]
+            cs[:, 1] *= new_hw[0] / ori_hw[0]  # Rescale y to [0, 1]
+        return [new_rgb, *corners_lst]
 
     def _gen_doncare_mask(self, cc, cf, y_step):
         # shape [2, W]
@@ -222,10 +236,12 @@ if __name__ == '__main__':
     os.makedirs('vis/dataset', exist_ok=True)
 
     YSTEP = 32
-    OUTY_MODE = 'constant'
-    #  OUTY_MODE = 'linear'
-    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640), flip=True, outy_mode=OUTY_MODE, outy_val=(-1.1,1.1),
-                                y_step=YSTEP, gen_doncare=True)
+    #  OUTY_MODE = 'constant'
+    OUTY_MODE = 'linear'
+    dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640),
+				flip=False, outy_mode=OUTY_MODE, outy_val=(-1.1,1.1),
+                                y_step=YSTEP, gen_doncare=True,
+				resize_h=False)
 
     #  ed, ey = find_invalid_data(args.gtpath)
     for i in trange(len(dataset)):
@@ -267,8 +283,8 @@ if __name__ == '__main__':
         # plot doncare
         x_cor = np.arange(rgb.shape[1])
         u_1d, d_1d = y_reg.numpy()
-        plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
-        plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
+        plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'y')
+        plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'y')
 
         plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
         plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')

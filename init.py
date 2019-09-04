@@ -22,7 +22,8 @@ def init(args):
                                   hw=(args.main_h, args.main_w),
                                   flip=args.flip, gamma=args.gamma,
                                   outy_mode=args.outy_mode, outy_val=(args.outy_val_up, args.outy_val_bt),
-                                  y_step=args.y_step, gen_doncare=args.ori_res_loss)
+                                  y_step=args.y_step, gen_doncare=args.ori_res_loss,
+                                  resize_h=args.resize_h)
     loader_train = DataLoader(dataset_train, args.batch_size_train,
                               shuffle=True, drop_last=True,
                               num_workers=args.num_workers,
@@ -55,6 +56,8 @@ def init(args):
         model_kwargs['dilate_scale'] = args.dilate_scale
     if args.branches:
         model_kwargs['branches'] = args.branches
+    if args.finetune_cor:
+        model_kwargs['finetune_cor'] = args.finetune_cor
     model_kwargs['use_rnn'] = args.use_rnn
     model_kwargs['pred_cor'] = args.pred_cor
 
@@ -74,11 +77,26 @@ def init(args):
     args.max_iters = args.epochs * len(loader_train)
     args.running_lr = args.warmup_lr if args.warmup_epochs > 0 else args.lr
     args.cur_iter = 0
-    optimizer = getattr(optim, args.optimizer)(
-        group_weight(net),
-        lr=args.lr,
-        weight_decay=args.weight_decay
-    )
+    if args.finetune_cor:
+        optimizer = getattr(optim, args.optimizer)(
+            group_weight(net.cor_reduce_height_module) + group_weight(net.cor_bi_rnn) + group_weight(net.cor_linear),
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+        )
+        for p in net.feature_extractor.parameters():
+            p.requires_grad = False
+        for p in net.reduce_height_module.parameters():
+            p.requires_grad = False
+        for p in net.bi_rnn.parameters():
+            p.requires_grad = False
+        for p in net.linear.parameters():
+            p.requires_grad = False
+    else:
+        optimizer = getattr(optim, args.optimizer)(
+            group_weight(net),
+            lr=args.lr,
+            weight_decay=args.weight_decay
+        )
 
     # Create tensorboard for monitoring training
     tb_path = os.path.join(args.logs, args.id)

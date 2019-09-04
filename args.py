@@ -55,6 +55,7 @@ def parse_args():
     parser.add_argument('--freeze_bn', type=int)
     parser.add_argument('--pred_cor', type=int, help='let model predict corner or not')
     # Dataset related
+    parser.add_argument('--resize_h', type=int)
     parser.add_argument('--flip', type=int, help='use flip augmentation')
     parser.add_argument('--gamma', type=int, help='use gamma augmentation')
     parser.add_argument('--outy_mode', choices=['linear', 'constant'], help='setting value of y when it is outside image plane')
@@ -74,6 +75,7 @@ def parse_args():
     parser.add_argument('--warmup_epochs', default=0, type=int, help='numbers of warmup epochs')
     parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--epochs', type=int, help='epochs to train')
+    parser.add_argument('--finetune_cor', default=0, type=int)
     # Misc
     parser.add_argument('--no_cuda', help='disable cuda', type=int)
     parser.add_argument('--seed', type=int, help='manual seed')

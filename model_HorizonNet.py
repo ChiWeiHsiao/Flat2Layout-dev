@@ -232,10 +232,12 @@ class LowResHorizonNet(nn.Module):
     def __init__(self, backbone, use_rnn=True, pred_cor=False,
                  init_bias=[-0.5, 0.5, -3, -3],
                  bn_momentum=None,
-                 branches=1):
+                 branches=1,
+                 finetune_cor=0):
         super(LowResHorizonNet, self).__init__()
         assert not use_rnn or branches == 1
-        if pred_cor:
+        assert finetune_cor == 0 or branches == 1
+        if pred_cor and not finetune_cor:
             self.out_c = 4  # y1,y2,c1,c2
         else:
             self.out_c = 2  # y1,y2
@@ -243,6 +245,7 @@ class LowResHorizonNet(nn.Module):
         self.backbone = backbone
         self.use_rnn = use_rnn
         self.rnn_hidden_size = 256
+        self.finetune_cor = finetune_cor
 
         # Encoder
         if backbone.startswith('res'):
@@ -326,6 +329,24 @@ class LowResHorizonNet(nn.Module):
                     i += 1
                     j = 0
 
+        if self.finetune_cor:
+            self.cor_reduce_height_module = nn.Sequential(
+                ConvCompressH(c4, c4//2),
+                ConvCompressH(c4//2, c4//2),
+                ConvCompressH(c4//2, c4//4),
+                ConvCompressH(c4//4, c4//8),
+            )
+            self.cor_bi_rnn = nn.LSTM(input_size=c_last,
+                                  hidden_size=self.rnn_hidden_size,
+                                  num_layers=2,
+                                  dropout=0.5,
+                                  batch_first=False,
+                                  bidirectional=True)
+            self.cor_drop_out = nn.Dropout(0.5)
+            self.cor_linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
+                                        out_features=self.out_c)
+            self.cor_linear.bias.data[0].fill_(init_bias[2])
+            self.cor_linear.bias.data[1].fill_(init_bias[3])
 
         if bn_momentum is not None:
             for m in self.modules():
@@ -336,7 +357,24 @@ class LowResHorizonNet(nn.Module):
         conv_list = self.feature_extractor(x)
         last_block = conv_list[-1]
 
-        if self.use_rnn:
+        if self.finetune_cor:
+            feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
+            feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
+            feature = feature.permute(2, 0, 1)  # [w, b, c*h]
+            output, hidden = self.bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
+            output = self.drop_out(output)
+            output = self.linear(output)  # [seq_len, b, 3]
+            output = output.view(output.shape[0], output.shape[1], self.out_c)  # [seq_len, b, 3]
+            output = output.permute(1, 2, 0)  # [b, 3, seq_len]
+            feature = self.cor_reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
+            feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
+            feature = feature.permute(2, 0, 1)  # [w, b, c*h]
+            output_cor, hidden = self.cor_bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
+            output_cor = self.cor_drop_out(output_cor)
+            output_cor = self.cor_linear(output_cor)  # [seq_len, b, 3]
+            output_cor = output_cor.view(output_cor.shape[0], output_cor.shape[1], self.out_c)  # [seq_len, b, 3]
+            output_cor = output_cor.permute(1, 2, 0)  # [b, 3, seq_len]
+        elif self.use_rnn:
             feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
             feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
             feature = feature.permute(2, 0, 1)  # [w, b, c*h]
@@ -361,7 +399,9 @@ class LowResHorizonNet(nn.Module):
             output = [v.permute(0, 2, 1) for v in output]
             output = torch.cat(output, 1)
 
-        if self.out_c == 2:
+        if self.finetune_cor:
+            return output, output_cor
+        elif self.out_c == 2:
             return output
         else:
             bon = output[:, :2, :]
