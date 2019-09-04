@@ -238,8 +238,9 @@ if __name__ == '__main__':
     YSTEP = 32
     #  OUTY_MODE = 'constant'
     OUTY_MODE = 'linear'
+    OUTY_VAL = (-1.1, 1.1)
     dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640),
-				flip=False, outy_mode=OUTY_MODE, outy_val=(-1.1,1.1),
+				flip=False, outy_mode=OUTY_MODE, outy_val=OUTY_VAL,
                                 y_step=YSTEP, gen_doncare=True,
 				resize_h=False)
 
@@ -275,7 +276,13 @@ if __name__ == '__main__':
         # plot high resolution reg upsapled from low resolution reg 
         if YSTEP > 1:
             ori_w = y_reg.shape[1]
-            upsample_y_reg = F.interpolate(lowr_y_reg.reshape([1,2,-1]), size=ori_w, mode='linear', align_corners=False)
+
+            pad_left = (2*lowr_y_reg[:,0]-lowr_y_reg[:,1]).unsqueeze(-1)
+            pad_right = (2*lowr_y_reg[:,-1]-lowr_y_reg[:,-2]).unsqueeze(-1)
+            lowr_y_reg = torch.cat([pad_left, lowr_y_reg, pad_right], 1)
+            upsample_y_reg = F.interpolate(lowr_y_reg.reshape([1,2,-1]), scale_factor=YSTEP, mode='linear', align_corners=False)
+            upsample_y_reg = upsample_y_reg[..., 32:-32].clamp(min=OUTY_VAL[0], max=OUTY_VAL[1])
+            #  upsample_y_reg = F.interpolate(lowr_y_reg.reshape([1,2,-1]), size=ori_w, mode='linear', align_corners=False)
             upsample_y_reg = upsample_y_reg.reshape([2, -1])
             upsample_u_1d, upsample_d_1d = upsample_y_reg.numpy()
             plt.plot(np.arange(rgb.shape[1]), (upsample_u_1d / 2 + 0.5) * rgb.shape[0], 'r-')
@@ -283,8 +290,8 @@ if __name__ == '__main__':
         # plot doncare
         x_cor = np.arange(rgb.shape[1])
         u_1d, d_1d = y_reg.numpy()
-        plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'y')
-        plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'y')
+        plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
+        plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
 
         plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
         plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')

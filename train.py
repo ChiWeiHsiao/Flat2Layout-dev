@@ -32,11 +32,19 @@ def forward_pass(x, y_reg, y_cor, y_dontcare=None):
         if args.ori_res_loss:
             # upsample Pred y_reg_ s.t. compute loss at full resolution
             ori_w = y_reg.shape[2]
-            y_reg_ = F.interpolate(y_reg_, size=ori_w, mode='linear', align_corners=False)
+            if args.upsample_lr_pad:
+                pad_left = (2*y_reg_[:,0]-y_reg_[:,1]).unsqueeze(-1)
+                pad_right = (2*y_reg_[:,-1]-y_reg_[:,-2]).unsqueeze(-1)
+                y_reg_ = torch.cat([pad_left, y_reg_, pad_right], -1)
+                y_reg_ = F.interpolate(y_reg_, scale_factor=args.y_step, mode='linear', align_corners=False)
+                y_reg_ = y_reg_[..., args.y_step:-args.y_step].clamp(min=args.outy_val_up, max=args.outy_val_bt)
+            else:
+                y_reg_ = F.interpolate(y_reg_, size=ori_w, mode='linear', align_corners=False)
             # dontcare: corners, two sides
-            y_dontcare = y_dontcare.to(device)
-            y_reg_ = y_reg_[~y_dontcare]
-            y_reg = y_reg[~y_dontcare]
+            if args.use_dontcare:
+                y_dontcare = y_dontcare.to(device)
+                y_reg_ = y_reg_[~y_dontcare]
+                y_reg = y_reg[~y_dontcare]
         else:
             # downsample GT y_reg s.t. compute loss at low resolution
             y_reg = (y_reg[:, :, args.y_step//2-1::args.y_step] + y_reg[:, :, args.y_step//2::args.y_step])/2

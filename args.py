@@ -43,6 +43,9 @@ def parse_args():
     parser.add_argument('--ori_res_loss', default=True, type=int, help='output low resolution, compute loss at full res')
     parser.add_argument('--weight_cor', default=1, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
+    # Upsample related
+    parser.add_argument('--use_dontcare', type=int)
+    parser.add_argument('--upsample_lr_pad', type=int)
     # Model related
     parser.add_argument('--net')
     parser.add_argument('--use_rnn', default=1, type=int)
