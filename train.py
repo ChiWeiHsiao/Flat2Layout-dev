@@ -33,8 +33,8 @@ def forward_pass(x, y_reg, y_cor, y_dontcare=None):
             # upsample Pred y_reg_ s.t. compute loss at full resolution
             ori_w = y_reg.shape[2]
             if args.upsample_lr_pad:
-                pad_left = (2*y_reg_[:,0]-y_reg_[:,1]).unsqueeze(-1)
-                pad_right = (2*y_reg_[:,-1]-y_reg_[:,-2]).unsqueeze(-1)
+                pad_left = (2*y_reg_[...,[0]]-y_reg_[...,[1]])
+                pad_right = (2*y_reg_[...,[-1]]-y_reg_[...,[-2]])
                 y_reg_ = torch.cat([pad_left, y_reg_, pad_right], -1)
                 y_reg_ = F.interpolate(y_reg_, scale_factor=args.y_step, mode='linear', align_corners=False)
                 y_reg_ = y_reg_[..., args.y_step:-args.y_step].clamp(min=args.outy_val_up, max=args.outy_val_bt)
