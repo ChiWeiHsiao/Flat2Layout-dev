@@ -46,6 +46,7 @@ def parse_args():
     # Upsample related
     parser.add_argument('--use_dontcare', type=int)
     parser.add_argument('--upsample_lr_pad', type=int)
+    parser.add_argument('--gt_down_upsample', type=int)
     # Model related
     parser.add_argument('--net')
     parser.add_argument('--gray_mode', type=int)
