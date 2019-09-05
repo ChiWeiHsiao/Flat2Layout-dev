@@ -28,15 +28,15 @@ def find_peaks(signal, winsz=3, min_v=0.05):
 
 def fit_line(xs, ys, mask):
     if len(xs) == 0:
-        return None, None
+        return None
     if mask.sum() < 2:
-        return None, None
+        return None
     xs = xs[mask]
     ys = ys[mask]
     m, b = siegelslopes(ys, xs)
     # line in homogeneous coordinate
     L = np.cross([0, 0*m+b, 1], [1, 1*m+b, 1])
-    return L, m
+    return L
 
 
 def interp_L(L, x=None, y=None):
@@ -54,7 +54,7 @@ def line_X_rectangle(L):
 
 
 def one_line_segment_case(xs, reg1d, mask):
-    L, m = fit_line(xs, reg1d, mask)
+    L = fit_line(xs, reg1d, mask)
     if L is None:
         return np.array([]).reshape(-1, 2)
     p0, p1 = line_X_rectangle(L)
@@ -85,13 +85,10 @@ def extract_corners(cor1d, reg1d, min_v=0.05):
         segments.append([pks[i-1], pks[i]+1])
 
     # Find line for each segment
-    Ls = []
-    ms = []
-    for s, t in segments:
-        L, m = fit_line(xs[s:t], reg1d[s:t], mask[s:t])
-        #  if np.abs(m-ms[-1]) < 0.5:
-        Ls.append(L)
-        ms.append(m)
+    Ls = [
+        fit_line(xs[s:t], reg1d[s:t], mask[s:t])
+        for s, t in segments
+    ]
 
     # Connect line into corners
     if len(Ls) == 2 and (Ls[0] is None or Ls[1] is None):
@@ -100,10 +97,17 @@ def extract_corners(cor1d, reg1d, min_v=0.05):
         print(segments[1][0], reg1d[segments[1][0]])
         #  if np.logical_and(reg1d[mask]>=0, reg1d[mask]<=1).sum() > 0:
             #  raise ValueError('Fall back: two segments only but at least one dont have line')
-        return one_line_segment_case(xs, reg1d, mask)
+        #  return one_line_segment_case(xs, reg1d, mask)
+        cor_lr = one_line_segment_case(xs, reg1d, mask)
+        cor_mid = np.array([[pks[1]/N, np.clip(reg1d[pks[1]], 0, 1)]])
+        if len(cor_lr) > 0:
+            return np.vstack([cor_lr[[0]], cor_mid, cor_lr[[1]]])
+        else:
+            # TODO check corner peak confidence: if small->only 1, if large->repeat 3
+            return np.vstack([cor_mid, cor_mid, cor_mid])
+
     for i in range(1, len(Ls)-1):
-        return one_line_segment_case(xs, reg1d, mask)
-        #  assert Ls[i] is not None, 'Middle segments dont have line !??'
+        assert Ls[i] is not None, 'Middle segments dont have line !??'
     corners = []
     if Ls[0] is None:
         p0, p1 = line_X_rectangle(Ls[1])
@@ -116,16 +120,10 @@ def extract_corners(cor1d, reg1d, min_v=0.05):
     
     for i in range(1, len(Ls)):
         if Ls[i-1] is None or Ls[i] is None:
-            #  print('i: ', i)
-            #  print('peak corners: ', pks)
-            #  print('Ls[i-1]: ', Ls[i-1])
-            #  print('Ls[i]: ', Ls[i])
-            #  print(segments[i][0], reg1d[segments[i][0]])
-            #  print(segments[i-1][0], reg1d[segments[i-1][0]])
-            #  raise ValueError('Ls[i-1] is None or Ls[i] is None')
             continue
         pts = np.cross(Ls[i-1], Ls[i])
         #  corners.append(pts[:2] / pts[2])
+
         # If intersection x is too far from predicted y_cor, xy=[y_cor, y_reg[y_cor]]
         toofar = 16
         if np.abs(N*pts[0] - pks[i]) < toofar:
@@ -141,7 +139,6 @@ def extract_corners(cor1d, reg1d, min_v=0.05):
         p0, p1 = line_X_rectangle(Ls[-2])
         corners.append(p1)
         corners.append(p1)
-        #  raise ValueError('Ls[-1] == None')
     else:
         p0, p1 = line_X_rectangle(Ls[-1])
         corners.append(p1)
