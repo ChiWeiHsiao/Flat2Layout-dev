@@ -171,10 +171,10 @@ def gogo_valid():
                         desc='Valid ep%d' % ith_epoch, position=2):
             with torch.no_grad():
                 if args.y_step > 1 and args.ori_res_loss:
-                    x, y_reg, y_cor, y_dontcare = next(iterator_valid)
+                    x, y_reg, y_cor, y_key, y_dontcare = next(iterator_valid)
                     losses = forward_pass(x, y_reg, y_cor, y_key, y_dontcare)
                 else:
-                    x, y_reg, y_cor = next(iterator_valid)
+                    x, y_reg, y_cor, y_key = next(iterator_valid)
                     losses = forward_pass(x, y_reg, y_cor, y_key)
             valid_num += x.size(0)
             for k, v in losses.items():
