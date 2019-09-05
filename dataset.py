@@ -238,7 +238,8 @@ if __name__ == '__main__':
     YSTEP = 32
     #  OUTY_MODE = 'constant'
     OUTY_MODE = 'linear'
-    OUTY_VAL = (-1.1, 1.1)
+    OUTY_VAL = (-1.05, 1.05)
+    PLOT_DONTCARE = True
     dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640),
 				flip=False, outy_mode=OUTY_MODE, outy_val=OUTY_VAL,
                                 y_step=YSTEP, gen_doncare=True,
@@ -277,8 +278,8 @@ if __name__ == '__main__':
         if YSTEP > 1:
             ori_w = y_reg.shape[1]
 
-            pad_left = (2*lowr_y_reg[:,0]-lowr_y_reg[:,1]).unsqueeze(-1)
-            pad_right = (2*lowr_y_reg[:,-1]-lowr_y_reg[:,-2]).unsqueeze(-1)
+            pad_left = (2*lowr_y_reg[:,[0]]-lowr_y_reg[:,[1]])
+            pad_right = (2*lowr_y_reg[:,[-1]]-lowr_y_reg[:,[-2]])
             lowr_y_reg = torch.cat([pad_left, lowr_y_reg, pad_right], 1)
             upsample_y_reg = F.interpolate(lowr_y_reg.reshape([1,2,-1]), scale_factor=YSTEP, mode='linear', align_corners=False)
             upsample_y_reg = upsample_y_reg[..., 32:-32].clamp(min=OUTY_VAL[0], max=OUTY_VAL[1])
@@ -288,12 +289,14 @@ if __name__ == '__main__':
             plt.plot(np.arange(rgb.shape[1]), (upsample_u_1d / 2 + 0.5) * rgb.shape[0], 'r-')
             plt.plot(np.arange(rgb.shape[1]), (upsample_d_1d / 2 + 0.5) * rgb.shape[0], 'r-')
         # plot doncare
-        x_cor = np.arange(rgb.shape[1])
-        u_1d, d_1d = y_reg.numpy()
-        plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
-        plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
-
+        if PLOT_DONTCARE:
+            x_cor = np.arange(rgb.shape[1])
+            u_1d, d_1d = y_reg.numpy()
+            plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
+            plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
+        # plot corners
         plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
         plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')
+
         plt.savefig('vis/dataset/%s.vis.png' % (dataset.gt_path[i].split('/')[-1][:-4]))
         plt.clf()
