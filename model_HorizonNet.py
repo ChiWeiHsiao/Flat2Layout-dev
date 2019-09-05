@@ -229,8 +229,8 @@ class HorizonNet(nn.Module):
 
 
 class LowResHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, pred_cor=False,
-                 init_bias=[-0.5, 0.5, -3, -3],
+    def __init__(self, backbone, use_rnn=True, pred_cor=False, pred_key=False,
+                 init_bias=[-0.5, 0.5, -3, -3, -3, -3],
                  bn_momentum=None,
                  branches=1,
                  finetune_cor=0,
@@ -238,10 +238,13 @@ class LowResHorizonNet(nn.Module):
         super(LowResHorizonNet, self).__init__()
         assert not use_rnn or branches == 1
         assert finetune_cor == 0 or branches == 1
-        if pred_cor and not finetune_cor:
+        if pred_cor and pred_key and not finetune_cor:
+            self.out_c = 6  # y1,y2,c1,c2,k1,k2
+        elif pred_cor and not finetune_cor:
             self.out_c = 4  # y1,y2,c1,c2
         else:
             self.out_c = 2  # y1,y2
+        print('self.out_c:', self.out_c)
 
         self.backbone = backbone
         self.use_rnn = use_rnn
@@ -296,11 +299,8 @@ class LowResHorizonNet(nn.Module):
             self.drop_out = nn.Dropout(0.5)
             self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
                                     out_features=self.out_c)
-            self.linear.bias.data[0].fill_(init_bias[0])
-            self.linear.bias.data[1].fill_(init_bias[1])
-            if self.out_c == 4:
-                self.linear.bias.data[2].fill_(init_bias[2])
-                self.linear.bias.data[3].fill_(init_bias[3])
+            for i in range(len(init_bias)):
+                self.linear.bias.data[i].fill_(init_bias[i])
         elif branches == 1:
             self.linear = nn.Sequential(
                 nn.Linear(c_last, self.rnn_hidden_size),
@@ -308,11 +308,8 @@ class LowResHorizonNet(nn.Module):
                 nn.Dropout(0.5),
                 nn.Linear(self.rnn_hidden_size, self.out_c),
             )
-            self.linear[-1].bias.data[0].fill_(init_bias[0])
-            self.linear[-1].bias.data[1].fill_(init_bias[1])
-            if self.out_c == 4:
-                self.linear[-1].bias.data[2].fill_(init_bias[2])
-                self.linear[-1].bias.data[3].fill_(init_bias[3])
+            for i in range(len(init_bias)):
+                self.linear[-1].bias.data[i].fill_(init_bias[i])
         else:
             self.linear = nn.ModuleList([
                 nn.Sequential(
@@ -407,10 +404,15 @@ class LowResHorizonNet(nn.Module):
             return output, output_cor
         elif self.out_c == 2:
             return output
-        else:
+        elif self.out_c == 4:
             bon = output[:, :2, :]
             cor = output[:, 2:, :]
             return bon, cor
+        else:
+            bon = output[:, :2, :]
+            cor = output[:, 2:4, :]
+            key = output[:, 4:, :]
+            return bon, cor, key
 
 
 if __name__ == '__main__':

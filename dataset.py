@@ -31,6 +31,14 @@ def gen_1d_corner(xys, w):
     cor_1d[x.astype(int)] = 1
     return cor_1d
 
+def gen_1d_ww_keypoint(ww_xys, w):
+    # ccw/cfw (wall-wall) & is not corner
+    key_1d = np.zeros(w, np.float32)
+    not_cor = np.logical_or(ww_xys[:, 1]<=0.0001 , ww_xys[:, 1]>=0.9999)
+    xw = ww_xys[not_cor, 0] * w
+    key_1d[xw.astype(int).clip(None, w-1)] = 1
+    return key_1d
+
 def gen_1d(xys, w, missing_val, mode='constant'):
     '''  generate 1d boundary GT
     Input:
@@ -148,17 +156,20 @@ class FlatLayoutDataset(Dataset):
         d_1d = gen_1d(cf, rgb.shape[1], missing_val=self.outy_val[1], mode=self.outy_mode)
         u_1d_corner = gen_1d_corner(cc, rgb.shape[1])
         d_1d_corner = gen_1d_corner(cf, rgb.shape[1])
+        u_1d_wwkey = gen_1d_ww_keypoint(ccw, rgb.shape[1])
+        d_1d_wwkey = gen_1d_ww_keypoint(cfw, rgb.shape[1])
 
         # To tensor
         x = torch.FloatTensor(rgb.transpose(2, 0, 1).copy())
         y_reg = torch.FloatTensor([u_1d, d_1d])
         y_cor = torch.FloatTensor([u_1d_corner, d_1d_corner])
+        y_key = torch.FloatTensor([u_1d_wwkey, d_1d_wwkey])
 
         if self.y_step > 1 and self.gen_doncare:
             y_dontcare = self._gen_doncare_mask(cc, cf, self.y_step)
-            return x, y_reg, y_cor, y_dontcare
+            return x, y_reg, y_cor, y_key, y_dontcare
         else:
-            return x, y_reg, y_cor
+            return x, y_reg, y_cor, y_key
 
     def _resize_h(self, rgb, *corners_lst):
         new_rgb = np.zeros_like(rgb)
@@ -252,14 +263,12 @@ if __name__ == '__main__':
             #  continue
 
         #  x, y_reg = dataset[i]
-        x, y_reg, y_cor, y_dontcare = dataset[i]
+        x, y_reg, y_cor, y_key, y_dontcare = dataset[i]
 
         rgb = np.clip(undo_normalize_rgb(x.permute(1, 2, 0).numpy()), 0, 1)
         u_1d, d_1d = y_reg.numpy()
         u_1d_corner, d_1d_corner = y_cor.numpy()
-
-        u_1d_xs = np.where(u_1d_corner)[0]
-        d_1d_xs = np.where(d_1d_corner)[0]
+        u_1d_key, d_1d_key = y_key.numpy()
 
         plt.imshow(rgb)
        # plot y_reg
@@ -295,8 +304,15 @@ if __name__ == '__main__':
             plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
             plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
         # plot corners
+        u_1d_xs = np.where(u_1d_corner)[0]
+        d_1d_xs = np.where(d_1d_corner)[0]
         plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
         plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')
+        # plot keypoints 
+        u_1d_key_xs = np.where(u_1d_key)[0]
+        d_1d_key_xs = np.where(d_1d_key)[0]
+        plt.plot(u_1d_key_xs, np.zeros_like(u_1d_key_xs)+rgb.shape[0]//2-5, 'bx')
+        plt.plot(d_1d_key_xs, np.zeros_like(d_1d_key_xs)+rgb.shape[0]//2+5, 'gx')
 
         plt.savefig('vis/dataset/%s.vis.png' % (dataset.gt_path[i].split('/')[-1][:-4]))
         plt.clf()

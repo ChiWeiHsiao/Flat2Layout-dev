@@ -62,6 +62,7 @@ def init(args):
         model_kwargs['finetune_cor'] = args.finetune_cor
     model_kwargs['use_rnn'] = args.use_rnn
     model_kwargs['pred_cor'] = args.pred_cor
+    model_kwargs['pred_key'] = args.pred_key
 
     net = Model(**model_kwargs).to(device)
     assert -1 <= args.freeze_earlier_blocks and args.freeze_earlier_blocks <= 4

@@ -10,14 +10,17 @@ from init import init
 from utils import save_model, adjust_learning_rate
 
 
-def forward_pass(x, y_reg, y_cor, y_dontcare=None):
+def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None):
     x = x.to(device)
     y_reg = y_reg.to(device)
     y_cor = y_cor.to(device)
+    y_key = y_key.to(device)
 
     # Encoder batch forward => feature pyramid
     losses = {}
-    if args.pred_cor:
+    if args.pred_cor and args.pred_key:
+        y_reg_, y_cor_, y_key_ = net(x)
+    elif args.pred_cor:
         y_reg_, y_cor_ = net(x)
     else:
         y_reg_ = net(x)
@@ -29,6 +32,9 @@ def forward_pass(x, y_reg, y_cor, y_dontcare=None):
         B, C, W = y_cor.shape
         y_cor = y_cor.reshape([B, C, W//args.y_step, args.y_step] )
         y_cor = y_cor.sum(3).float()
+        # downsample GT y_key s.t. compute loss at low resolution
+        y_key = y_key.reshape([B, C, W//args.y_step, args.y_step] )
+        y_key = y_key.sum(3).float()
         if args.ori_res_loss:
             # upsample Pred y_reg_ s.t. compute loss at full resolution
             ori_w = y_reg.shape[2]
@@ -63,6 +69,11 @@ def forward_pass(x, y_reg, y_cor, y_dontcare=None):
         losses['y_cor'] = F.binary_cross_entropy_with_logits(y_cor_, y_cor, reduction='mean',
                 pos_weight=torch.FloatTensor([args.pos_weight_cor]).to(device))
         losses['total'] += args.weight_cor * losses['y_cor']
+
+    if args.pred_key:
+        losses['y_key'] = F.binary_cross_entropy_with_logits(y_key_, y_key, reduction='mean',
+                pos_weight=torch.FloatTensor([args.pos_weight_cor]).to(device))
+        losses['total'] += args.weight_cor * losses['y_key']
 
     total_pixel = np.prod(y_reg.shape)
     if args.loss == 'l1':
@@ -135,11 +146,11 @@ def gogo_train():
         adjust_learning_rate(optimizer, args)
         args.cur_iter += 1
         if args.y_step > 1 and args.ori_res_loss:
-            x, y_reg, y_cor, y_dontcare = next(iterator_train)
-            losses = forward_pass(x, y_reg, y_cor, y_dontcare)
+            x, y_reg, y_cor, y_key, y_dontcare = next(iterator_train)
+            losses = forward_pass(x, y_reg, y_cor, y_key, y_dontcare)
         else:
-            x, y_reg, y_cor = next(iterator_train)
-            losses = forward_pass(x, y_reg, y_cor)
+            x, y_reg, y_cor, y_key = next(iterator_train)
+            losses = forward_pass(x, y_reg, y_cor, y_key)
         for k, v in losses.items():
             k = 'train/%s' % k
             tb_writer.add_scalar(k, v.item(), args.cur_iter)
@@ -161,10 +172,10 @@ def gogo_valid():
             with torch.no_grad():
                 if args.y_step > 1 and args.ori_res_loss:
                     x, y_reg, y_cor, y_dontcare = next(iterator_valid)
-                    losses = forward_pass(x, y_reg, y_cor, y_dontcare)
+                    losses = forward_pass(x, y_reg, y_cor, y_key, y_dontcare)
                 else:
                     x, y_reg, y_cor = next(iterator_valid)
-                    losses = forward_pass(x, y_reg, y_cor)
+                    losses = forward_pass(x, y_reg, y_cor, y_key)
             valid_num += x.size(0)
             for k, v in losses.items():
                 valid_loss[k] = valid_loss.get(k, 0) + v.item() * x.size(0)
