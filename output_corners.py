@@ -234,7 +234,16 @@ if __name__ == '__main__':
         # Prepare output
         with torch.no_grad():
             out_reg, out_cor = net(x[None])
-            out_reg = F.interpolate(out_reg, size=w, mode='linear', align_corners=False)
+            print('out_reg: ', out_reg.shape)
+            print('out_cor: ', out_cor.shape)
+            # Upsample W/32 --> W
+            y_step = w // out_reg.shape[-1]
+            pad_left = (2*out_reg[...,[0]]-out_reg[...,[1]])
+            pad_right = (2*out_reg[...,[-1]]-out_reg[...,[-2]])
+            out_reg = torch.cat([pad_left, out_reg, pad_right], -1)
+            out_reg = F.interpolate(out_reg, scale_factor=y_step, mode='linear', align_corners=False)
+            out_reg = out_reg[..., y_step:-y_step].clamp(min=-1.05, max=1.05)
+            #  out_reg = F.interpolate(out_reg, size=w, mode='linear', align_corners=False)
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
             np_cor = torch.sigmoid(out_cor[0]).cpu().numpy()
 
