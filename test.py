@@ -76,17 +76,40 @@ if __name__ == '__main__':
             #  out_reg = net(x[None])
             output = net(x[None])
             if isinstance(output, tuple):
-                out_reg, out_cor = output
-                # plot ceil,floor corners at the bottom of image
-                u_cor, d_cor = out_cor.cpu().numpy()[0].repeat(args.y_step, axis=-1)
-                u_cor = u_cor.reshape([1,-1]).repeat(10, axis=0)
-                d_cor = d_cor.reshape([1,-1]).repeat(10, axis=0)
-                u_cor = u_cor.reshape([10, w, 1]).repeat(3, axis=2)
-                d_cor = d_cor.reshape([10, w, 1]).repeat(3, axis=2)
-                u_cor[..., [0,2]] = 0  # keep only G
-                d_cor[..., [0,1]] = 0  # keep only B
-                u_cor, d_cor = 255*u_cor, 255*d_cor
-                rgb = np.vstack([rgb, u_cor, d_cor])
+                if len(output) == 3:
+                    out_reg, out_cor, out_key = output
+                    # plot ceil,floor corners at the bottom of image
+                    u_cor, d_cor = out_cor.cpu().numpy()[0].repeat(args.y_step, axis=-1)
+                    u_cor = u_cor.reshape([1,-1]).repeat(10, axis=0)
+                    d_cor = d_cor.reshape([1,-1]).repeat(10, axis=0)
+                    u_cor = u_cor.reshape([10, w, 1]).repeat(3, axis=2)
+                    d_cor = d_cor.reshape([10, w, 1]).repeat(3, axis=2)
+                    u_cor[..., [0,2]] = 0  # keep only G
+                    d_cor[..., [0,1]] = 0  # keep only B
+                    u_cor, d_cor = 255*u_cor, 255*d_cor
+                    rgb = np.vstack([rgb, u_cor, d_cor])
+
+                    u_key, d_key = out_key.cpu().numpy()[0].repeat(args.y_step, axis=-1)
+                    u_key = u_key.reshape([1,-1]).repeat(10, axis=0)
+                    d_key = d_key.reshape([1,-1]).repeat(10, axis=0)
+                    u_key = u_key.reshape([10, w, 1]).repeat(3, axis=2)
+                    d_key = d_key.reshape([10, w, 1]).repeat(3, axis=2)
+                    u_key[..., [2]] = 0  # R+G
+                    d_key[..., [1]] = 0  # R+B
+                    u_key, d_key = 255*u_key, 255*d_key
+                    rgb = np.vstack([rgb, u_key, d_key])
+                else:
+                    out_reg, out_cor = output
+                    # plot ceil,floor corners at the bottom of image
+                    u_cor, d_cor = out_cor.cpu().numpy()[0].repeat(args.y_step, axis=-1)
+                    u_cor = u_cor.reshape([1,-1]).repeat(10, axis=0)
+                    d_cor = d_cor.reshape([1,-1]).repeat(10, axis=0)
+                    u_cor = u_cor.reshape([10, w, 1]).repeat(3, axis=2)
+                    d_cor = d_cor.reshape([10, w, 1]).repeat(3, axis=2)
+                    u_cor[..., [0,2]] = 0  # keep only G
+                    d_cor[..., [0,1]] = 0  # keep only B
+                    u_cor, d_cor = 255*u_cor, 255*d_cor
+                    rgb = np.vstack([rgb, u_cor, d_cor])
             else:
                 out_reg = output
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
