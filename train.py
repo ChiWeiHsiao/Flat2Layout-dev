@@ -127,7 +127,7 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None):
             losses['neg_p'] = tn / (tn + fn)
 
         if args.pred_cor:
-            pos = (y_cor >= 0) 
+            pos = (y_cor >= 0.5)
             pos_ = (y_cor_ >= 0)
             tp = (pos & pos_).float().sum() 
             fp = (~pos & pos_).float().sum() 
@@ -139,7 +139,7 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None):
                 losses['cor_p'] = tn / (tn + fn)
 
         if args.pred_key:
-            pos = (y_key >= 0) 
+            pos = (y_key >= 0.5)
             pos_ = (y_key_ >= 0)
             tp = (pos & pos_).float().sum() 
             fp = (~pos & pos_).float().sum() 
