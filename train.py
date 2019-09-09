@@ -126,6 +126,30 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None):
         if tn + fn > 0:
             losses['neg_p'] = tn / (tn + fn)
 
+        if args.pred_cor:
+            pos = (y_cor >= 0) 
+            pos_ = (y_cor_ >= 0)
+            tp = (pos & pos_).float().sum() 
+            fp = (~pos & pos_).float().sum() 
+            tn = (~pos & ~pos_).float().sum()
+            fn = (pos & ~pos_).float().sum()
+            if tn + fp > 0:
+                losses['cor_r'] = tn / (tn + fp)
+            if tn + fn > 0:
+                losses['cor_p'] = tn / (tn + fn)
+
+        if args.pred_key:
+            pos = (y_key >= 0) 
+            pos_ = (y_key_ >= 0)
+            tp = (pos & pos_).float().sum() 
+            fp = (~pos & pos_).float().sum() 
+            tn = (~pos & ~pos_).float().sum()
+            fn = (pos & ~pos_).float().sum()
+            if tn + fp > 0:
+                losses['key_r'] = tn / (tn + fp)
+            if tn + fn > 0:
+                losses['key_p'] = tn / (tn + fn)
+
     return losses
 
 def gogo_train():
