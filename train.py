@@ -133,10 +133,10 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None):
             fp = (~pos & pos_).float().sum() 
             tn = (~pos & ~pos_).float().sum()
             fn = (pos & ~pos_).float().sum()
-            if tn + fp > 0:
-                losses['cor_r'] = tn / (tn + fp)
-            if tn + fn > 0:
-                losses['cor_p'] = tn / (tn + fn)
+            if tp + fn > 0:
+                losses['cor_r'] = tp / (tp + fn)
+            if tp + fp > 0:
+                losses['cor_p'] = tp / (tp + fp)
 
         if args.pred_key:
             pos = (y_key >= 0.5)
@@ -145,10 +145,10 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None):
             fp = (~pos & pos_).float().sum() 
             tn = (~pos & ~pos_).float().sum()
             fn = (pos & ~pos_).float().sum()
-            if tn + fp > 0:
-                losses['key_r'] = tn / (tn + fp)
-            if tn + fn > 0:
-                losses['key_p'] = tn / (tn + fn)
+            if tp + fn > 0:
+                losses['key_r'] = tp / (tp + fn)
+            if tp + fp > 0:
+                losses['key_p'] = tp / (tp + fp)
 
     return losses
 
