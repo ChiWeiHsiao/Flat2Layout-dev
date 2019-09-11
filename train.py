@@ -95,6 +95,7 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
     else:
         raise NotImplementedError()
     if mode=='train' and args.septrain and (args.cur_iter > 1/3*args.max_iters and args.cur_iter <= 2/3*args.max_iters): losses['y_reg'] *= 0
+    if mode=='train' and args.no_reg_loss: losses['y_reg'] *= 0
     losses['total'] += losses['y_reg']
 
     if args.lap_order:
@@ -167,6 +168,14 @@ def gogo_train():
         for m in net.feature_extractor.modules():
             if isinstance(m, (nn.BatchNorm2d, nn.BatchNorm1d)):
                 m.eval()
+    if args.freeze_stage1:
+        net.eval()
+        net.corkey_1x1.train()
+        net.corkey_reduce_height_module.train()
+        net.corkey_bi_rnn.train()
+        net.corkey_drop_out.train()
+        net.corkey_linear.train()
+
     iterator_train = iter(loader_train)
     for _ in trange(len(loader_train),
                     desc='Train ep%s' % ith_epoch, position=1):
@@ -222,7 +231,7 @@ if __name__ == '__main__':
 
     if args.load_pretrain:
         state_dict = torch.load(args.load_pretrain)
-        net.load_state_dict(state_dict['state_dict'])
+        net.load_state_dict(state_dict['state_dict'], strict=False)
         ith_epoch = 0
         gogo_valid()
 

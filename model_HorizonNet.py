@@ -418,216 +418,93 @@ class LowResHorizonNet(nn.Module):
             return bon, cor, key
 
 
-class TwoStageNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, pred_cor=False, pred_key=False,
-                 init_bias=[-0.5, 0.5, -3, -3, -3, -3],
-                 bn_momentum=None,
-                 branches=1,
-                 finetune_cor=0,
-                 gray_mode=0,
-                 drop_p=0.5):
-        super(TwoStageNet, self).__init__()
-        if pred_cor and pred_key:
-            self.out_c = 6  # y1,y2,c1,c2,k1,k2
-        elif pred_cor:
-            self.out_c = 4  # y1,y2,c1,c2
-        else:
-            self.out_c = 2  # y1,y2
-        print('self.out_c:', self.out_c)
 
-        self.backbone = backbone
-        self.use_rnn = use_rnn
-        self.rnn_hidden_size = 256
-        self.drop_p = drop_p
-
-        # Encoder
-        if backbone.startswith('res'):
-            self.feature_extractor = Resnet(backbone, pretrained=True)
-        elif backbone.startswith('dense'):
-            self.feature_extractor = Densenet(backbone, pretrained=True)
-        elif backbone == 'ade20k_resnet50':
-            self.feature_extractor = model_ADE20k_encoder.resnet50()
-        else:
-            raise NotImplementedError()
-
-        # Inference channels number from each block of the encoder
+class TwoStageNet(LowResHorizonNet):
+    def __init__(self, *args, **kwargs):
+        super(TwoStageNet, self).__init__(*args, **kwargs)
         with torch.no_grad():
             dummy = torch.zeros(1, 3, 512, 1024)
             c1, c2, c3, c4 = [b.shape[1] for b in self.feature_extractor(dummy)]
 
-        # Convert features from block 4 of the encoder into B x C x 1 x W'
-        self.reduce_height_module = nn.Sequential(
-            ConvCompressH(c4, c4//2),
-            ConvCompressH(c4//2, c4//2),
-            ConvCompressH(c4//2, c4//4),
-            ConvCompressH(c4//4, c4//8),
+        self.corkey_1x1 = nn.Sequential(
+            nn.Conv2d(c4, 512, kernel_size=1, bias=False),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
         )
-        c_last = 2*c4//8  # h*c
+        self.corkey_reduce_height_module = nn.Sequential(
+            ConvCompressH(512+4, 512//2),
+            ConvCompressH(512//2, 512//2),
+            ConvCompressH(512//2, 512//4),
+            ConvCompressH(512//4, 512//8),
+        )
+        self.corkey_bi_rnn = nn.LSTM(input_size=512//4,
+                                     hidden_size=128,
+                                     num_layers=2,
+                                     dropout=self.drop_p,
+                                     batch_first=False,
+                                     bidirectional=True)
+        self.corkey_drop_out = nn.Dropout(self.drop_p)
+        self.corkey_linear = nn.Linear(in_features=2 * 128,
+                                       out_features=4)
+        for i in range(2, len(kwargs['init_bias'])):
+            self.corkey_linear.bias.data[i-2].fill_(kwargs['init_bias'][i])
 
-        # 1D prediction
-        self.bi_rnn = nn.LSTM(input_size=c_last,
-                              hidden_size=self.rnn_hidden_size,
-                              num_layers=2,
-                              dropout=self.drop_p,
-                              batch_first=False,
-                              bidirectional=True)
-        self.drop_out = nn.Dropout(self.drop_p)
-        self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
-                                out_features=self.out_c)
-        for i in range(len(init_bias)):
-            self.linear.bias.data[i].fill_(init_bias[i])
-
-        #  self.linear = nn.Sequential(
-            #  nn.Linear(c_last, self.rnn_hidden_size),
-            #  nn.ReLU(inplace=True),
-            #  nn.Dropout(self.drop_p),
-            #  nn.Linear(self.rnn_hidden_size, self.out_c),
-        #  )
-        #  self.linear[-1].bias.data[0*self.step_cols:1*self.step_cols].fill_(init_bias[0])
-        #  self.linear[-1].bias.data[1*self.step_cols:2*self.step_cols].fill_(init_bias[1])
-        #  for i in range(len(init_bias)):
-            #  self.linear[-1].bias.data[i].fill_(init_bias[i])
-
-
-        if bn_momentum is not None:
-            for m in self.modules():
-                if isinstance(m, nn.modules.batchnorm._BatchNorm):
-                    m.momentum = bn_momentum
 
     def forward(self, x):
-        conv_list = self.feature_extractor(x)
-        last_block = conv_list[-1]
-
-        feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
-        feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
-        feature = feature.permute(2, 0, 1)  # [w, b, c*h]
-        output, hidden = self.bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
-        output = self.drop_out(output)
-        output = self.linear(output)  # [seq_len, b, 3]
-        output = output.view(output.shape[0], output.shape[1], self.out_c)  # [seq_len, b, 3]
-        output = output.permute(1, 2, 0)  # [b, 3, seq_len]
-
-        if self.out_c == 2:
-            return output
-        elif self.out_c == 4:
-            bon = output[:, :2, :]
-            cor = output[:, 2:, :]
-            return bon, cor
-        else:
-            bon = output[:, :2, :]
-            cor = output[:, 2:4, :]
-            key = output[:, 4:, :]
-            return bon, cor, key
-
-class LowHighHorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, pred_cor=False, pred_key=False,
-                 init_bias=[-0.5, 0.5, -3, -3, -3, -3],
-                 bn_momentum=None,
-                 branches=1,
-                 finetune_cor=0,
-                 gray_mode=0,
-                 drop_p=0.5):
-        super(LowHighHorizonNet, self).__init__()
-        if pred_cor and pred_key:
-            self.out_c = 6  # y1,y2,c1,c2,k1,k2
-        elif pred_cor:
-            self.out_c = 4  # y1,y2,c1,c2
-        else:
-            self.out_c = 2  # y1,y2
-        print('self.out_c:', self.out_c)
-
-        self.backbone = backbone
-        self.use_rnn = use_rnn
-        self.rnn_hidden_size = 256
-        self.drop_p = drop_p
-
-        # Encoder
-        if backbone.startswith('res'):
-            self.feature_extractor = Resnet(backbone, pretrained=True)
-        elif backbone.startswith('dense'):
-            self.feature_extractor = Densenet(backbone, pretrained=True)
-        elif backbone == 'ade20k_resnet50':
-            self.feature_extractor = model_ADE20k_encoder.resnet50()
-        else:
-            raise NotImplementedError()
-
-        # Inference channels number from each block of the encoder
         with torch.no_grad():
-            dummy = torch.zeros(1, 3, 512, 1024)
-            c1, c2, c3, c4 = [b.shape[1] for b in self.feature_extractor(dummy)]
+            if self.out_c == 2:
+                bon = super(TwoStageNet, self).forward(x)
+            elif self.out_c == 4:
+                bon, _ = super(TwoStageNet, self).forward(x)
+            else:
+                bon, _, _ = super(TwoStageNet, self).forward(x)
 
-        # Convert features from block 4 of the encoder into B x C x 1 x W'
-        self.reduce_height_module = nn.Sequential(
-            ConvCompressH(c4, c4//2),
-            ConvCompressH(c4//2, c4//2),
-            ConvCompressH(c4//2, c4//4),
-            ConvCompressH(c4//4, c4//8),
-        )
-        c_last = 2*c4//8  # h*c
+            conv_list = self.feature_extractor(x)
+            last_block = conv_list[-1]
 
-        # 1D prediction
-        self.bi_rnn = nn.LSTM(input_size=c_last,
-                              hidden_size=self.rnn_hidden_size,
-                              num_layers=2,
-                              dropout=self.drop_p,
-                              batch_first=False,
-                              bidirectional=True)
-        self.drop_out = nn.Dropout(self.drop_p)
-        self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
-                                out_features=self.out_c)
-        for i in range(len(init_bias)):
-            self.linear.bias.data[i].fill_(init_bias[i])
+        bonmap = self.bon2map(bon)
 
-        #  self.linear = nn.Sequential(
-            #  nn.Linear(c_last, self.rnn_hidden_size),
-            #  nn.ReLU(inplace=True),
-            #  nn.Dropout(self.drop_p),
-            #  nn.Linear(self.rnn_hidden_size, self.out_c),
-        #  )
-        #  self.linear[-1].bias.data[0*self.step_cols:1*self.step_cols].fill_(init_bias[0])
-        #  self.linear[-1].bias.data[1*self.step_cols:2*self.step_cols].fill_(init_bias[1])
-        #  for i in range(len(init_bias)):
-            #  self.linear[-1].bias.data[i].fill_(init_bias[i])
-
-
-        if bn_momentum is not None:
-            for m in self.modules():
-                if isinstance(m, nn.modules.batchnorm._BatchNorm):
-                    m.momentum = bn_momentum
-
-    def forward(self, x):
-        conv_list = self.feature_extractor(x)
-        last_block = conv_list[-1]
-
-        feature = self.reduce_height_module(last_block)  # [b, c=256, h=2, w=20(=640/32)]
+        # stage2 for cor, key
+        feature = self.corkey_1x1(last_block)
+        feature = torch.cat([feature, bonmap], 1)
+        feature = self.corkey_reduce_height_module(feature)  # [b, c=64, h=2, w=20]
         feature = feature.reshape(feature.shape[0], -1, feature.shape[3]) # [b, c*h, w]
         feature = feature.permute(2, 0, 1)  # [w, b, c*h]
-        output, hidden = self.bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
-        output = self.drop_out(output)
-        output = self.linear(output)  # [seq_len, b, 3]
-        output = output.view(output.shape[0], output.shape[1], self.out_c)  # [seq_len, b, 3]
-        output = output.permute(1, 2, 0)  # [b, 3, seq_len]
+        output, hidden = self.corkey_bi_rnn(feature)  # [seq_len, b, num_directions * hidden_size]
+        output = self.corkey_drop_out(output)
+        output = self.corkey_linear(output)  # [seq_len, b, 3]
+        output = output.view(output.shape[0], output.shape[1], 4)  # [seq_len, b, 4]
+        output = output.permute(1, 2, 0)  # [b, 4, seq_len]
 
-        if self.out_c == 2:
-            return output
-        elif self.out_c == 4:
-            bon = output[:, :2, :]
-            cor = output[:, 2:, :]
-            return bon, cor
-        else:
-            bon = output[:, :2, :]
-            cor = output[:, 2:4, :]
-            key = output[:, 4:, :]
-            return bon, cor, key
+        cor = output[:, :2, :]
+        key = output[:, 2:, :]
+        return bon, cor, key
+
+    def bon2map(self, bon):
+        # bon: B x 2 x w
+        # bonmap: B x 4 x w x w
+        w = bon.shape[-1]
+        c_bon = bon[:, [0], None, :]  # B x 1 x 1 x w
+        f_bon = bon[:, [1], None, :]  # B x 1 x 1 x w
+        ys = torch.linspace(-1, 1, w).to(bon.device)
+        ys = ys[None, None, :, None]  # 1 x 1 x w x 1
+        c_bon_l1 = (c_bon - ys)  # B x 1 x w x w
+        f_bon_l1 = (f_bon - ys)  # B x 1 x w x w
+
+        mp1 = (3 - c_bon_l1.abs() * 2).clamp(0, 3)
+        mp2 = (3 - f_bon_l1.abs() * 2).clamp(0, 3)
+        mp3 = torch.sign(c_bon_l1)
+        mp4 = torch.sign(f_bon_l1)
+        return torch.cat([mp1, mp2, mp3, mp4], 1)
 
 
 
 if __name__ == '__main__':
-    net = LowResHorizonNet(backbone='resnet50', pred_cor=True)
-    dummy = torch.zeros(1, 3, 640, 640)
-    bon, cor = net(dummy)
-    print('output shape w/ rnn: ', bon.shape, cor.shape)  # (1, 2, 20)
+    net = TwoStageNet(backbone='densenet169', pred_cor=True, pred_key=True, init_bias=[-0.5, 0.5, -3, -3, -3, -3])
+    net.load_state_dict(torch.load('ckpt/dense169_newup_gtup_k1k2_septrain/epoch_90.pth')['state_dict'], strict=False)
+    net.eval()
+    with torch.no_grad():
+        dummy = torch.zeros(1, 3, 640, 640)
+        bon, cor, key = net(dummy)
+        print(bon.shape, cor.shape, key.shape)
 
-    net = LowResHorizonNet(backbone='resnet50', use_rnn=False, pred_cor=False)
-    pred = net(dummy)
-    print('output shape w/o rnn: ', pred.shape)
