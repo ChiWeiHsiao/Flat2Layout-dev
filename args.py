@@ -81,6 +81,7 @@ def parse_args():
     parser.add_argument('--warmup_epochs', default=0, type=int, help='numbers of warmup epochs')
     parser.add_argument('--weight_decay', type=float, default=0)
     parser.add_argument('--epochs', type=int, help='epochs to train')
+    parser.add_argument('--septrain', default=0, type=int)
     parser.add_argument('--finetune_cor', default=0, type=int)
     # Misc
     parser.add_argument('--no_cuda', help='disable cuda', type=int)
