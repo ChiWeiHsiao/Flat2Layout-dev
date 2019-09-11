@@ -75,7 +75,7 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
         losses['y_key'] = F.binary_cross_entropy_with_logits(y_key_, y_key, reduction='mean',
                 pos_weight=torch.FloatTensor([args.pos_weight_cor]).to(device))
         if mode=='train' and args.septrain and (args.cur_iter <= 1/3*args.max_iters): losses['y_key'] *= 0
-        losses['total'] += args.weight_cor * losses['y_key']
+        losses['total'] += args.weight_key * losses['y_key']
 
     total_pixel = np.prod(y_reg.shape)
     if args.loss == 'l1':
@@ -219,11 +219,14 @@ if __name__ == '__main__':
     print(' Experiment setting '.center(60, '='))
     args = parse_args()
     device, loader_train, loader_valid, net, model_kwargs, optimizer, tb_writer = init(args)
-    print('=' * 60)
 
     if args.load_pretrain:
         state_dict = torch.load(args.load_pretrain)
         net.load_state_dict(state_dict['state_dict'])
+        ith_epoch = 0
+        gogo_valid()
+
+    print('=' * 60)
 
     # Start training
     for ith_epoch in trange(1, args.epochs + 1, desc='Epoch', unit='ep'):
