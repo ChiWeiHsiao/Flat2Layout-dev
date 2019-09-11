@@ -221,6 +221,10 @@ if __name__ == '__main__':
     device, loader_train, loader_valid, net, model_kwargs, optimizer, tb_writer = init(args)
     print('=' * 60)
 
+    if args.load_pretrain:
+        state_dict = torch.load(args.load_pretrain)
+        net.load_state_dict(state_dict['state_dict'])
+
     # Start training
     for ith_epoch in trange(1, args.epochs + 1, desc='Epoch', unit='ep'):
         gogo_train()
