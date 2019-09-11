@@ -61,6 +61,7 @@ def parse_args():
     parser.add_argument('--freeze_bn', type=int)
     parser.add_argument('--pred_cor', type=int, help='let model predict corner or not')
     parser.add_argument('--pred_key', type=int, help='let model predict wall-wall keypoint or not')
+    parser.add_argument('--drop_p', default=0.5, type=float)
     # Dataset related
     parser.add_argument('--resize_h', type=int)
     parser.add_argument('--flip', type=int, help='use flip augmentation')

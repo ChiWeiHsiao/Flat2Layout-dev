@@ -147,7 +147,7 @@ class GlobalHeightStage(nn.Module):
 HorizonNet
 '''
 class HorizonNet(nn.Module):
-    def __init__(self, backbone, use_rnn=True, init_bias=[-0.5, 0.5]):
+    def __init__(self, backbone, use_rnn=True, init_bias=[-0.5, 0.5], drop_p=0.5):
         super(HorizonNet, self).__init__()
         self.out_c = 2  # 2=y1,y2 3=y1,y2,c
         self.backbone = backbone
@@ -155,6 +155,7 @@ class HorizonNet(nn.Module):
         self.out_scale = 8
         self.step_cols = 4
         self.rnn_hidden_size = 512
+        self.drop_p = drop_p
 
         # Encoder
         if backbone.startswith('res'):
@@ -178,10 +179,10 @@ class HorizonNet(nn.Module):
             self.bi_rnn = nn.LSTM(input_size=c_last,
                                   hidden_size=self.rnn_hidden_size,
                                   num_layers=2,
-                                  dropout=0.5,
+                                  dropout=self.drop_p,
                                   batch_first=False,
                                   bidirectional=True)
-            self.drop_out = nn.Dropout(0.5)
+            self.drop_out = nn.Dropout(self.drop_p)
             self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
                                     out_features=self.out_c * self.step_cols)
             self.linear.bias.data[0*self.step_cols:1*self.step_cols].fill_(init_bias[0])
@@ -234,7 +235,8 @@ class LowResHorizonNet(nn.Module):
                  bn_momentum=None,
                  branches=1,
                  finetune_cor=0,
-                 gray_mode=0):
+                 gray_mode=0,
+                 drop_p=0.5):
         super(LowResHorizonNet, self).__init__()
         assert not use_rnn or branches == 1
         assert finetune_cor == 0 or branches == 1
@@ -251,6 +253,7 @@ class LowResHorizonNet(nn.Module):
         self.rnn_hidden_size = 256
         self.finetune_cor = finetune_cor
         self.gray_mode = gray_mode
+        self.drop_p = drop_p
 
         # Encoder
         if backbone.startswith('res'):
@@ -293,10 +296,10 @@ class LowResHorizonNet(nn.Module):
             self.bi_rnn = nn.LSTM(input_size=c_last,
                                   hidden_size=self.rnn_hidden_size,
                                   num_layers=2,
-                                  dropout=0.5,
+                                  dropout=self.drop_p,
                                   batch_first=False,
                                   bidirectional=True)
-            self.drop_out = nn.Dropout(0.5)
+            self.drop_out = nn.Dropout(self.drop_p)
             self.linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
                                     out_features=self.out_c)
             for i in range(len(init_bias)):
@@ -305,7 +308,7 @@ class LowResHorizonNet(nn.Module):
             self.linear = nn.Sequential(
                 nn.Linear(c_last, self.rnn_hidden_size),
                 nn.ReLU(inplace=True),
-                nn.Dropout(0.5),
+                nn.Dropout(self.drop_p),
                 nn.Linear(self.rnn_hidden_size, self.out_c),
             )
             for i in range(len(init_bias)):
@@ -315,7 +318,7 @@ class LowResHorizonNet(nn.Module):
                 nn.Sequential(
                     nn.Linear(c_last, self.rnn_hidden_size),
                     nn.ReLU(inplace=True),
-                    nn.Dropout(0.5),
+                    nn.Dropout(self.drop_p),
                     nn.Linear(self.rnn_hidden_size, self.out_c//self.branches),
                 )
                 for _ in range(self.branches)
@@ -338,10 +341,10 @@ class LowResHorizonNet(nn.Module):
             self.cor_bi_rnn = nn.LSTM(input_size=c_last,
                                   hidden_size=self.rnn_hidden_size,
                                   num_layers=2,
-                                  dropout=0.5,
+                                  dropout=self.drop_p,
                                   batch_first=False,
                                   bidirectional=True)
-            self.cor_drop_out = nn.Dropout(0.5)
+            self.cor_drop_out = nn.Dropout(self.drop_p)
             self.cor_linear = nn.Linear(in_features=2 * self.rnn_hidden_size,
                                         out_features=self.out_c)
             self.cor_linear.bias.data[0].fill_(init_bias[2])
@@ -413,6 +416,7 @@ class LowResHorizonNet(nn.Module):
             cor = output[:, 2:4, :]
             key = output[:, 4:, :]
             return bon, cor, key
+
 
 
 if __name__ == '__main__':

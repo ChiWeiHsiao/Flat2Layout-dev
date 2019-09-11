@@ -63,6 +63,7 @@ def init(args):
     model_kwargs['use_rnn'] = args.use_rnn
     model_kwargs['pred_cor'] = args.pred_cor
     model_kwargs['pred_key'] = args.pred_key
+    model_kwargs['drop_p'] = args.drop_p
 
     net = Model(**model_kwargs).to(device)
     assert -1 <= args.freeze_earlier_blocks and args.freeze_earlier_blocks <= 4
