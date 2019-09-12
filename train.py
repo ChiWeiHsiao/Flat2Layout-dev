@@ -183,7 +183,7 @@ def gogo_train():
                     desc='Train ep%s' % ith_epoch, position=1):
         adjust_learning_rate(optimizer, args)
         args.cur_iter += 1
-        if args.y_step > 1 and args.ori_res_loss:
+        if args.y_step > 1 and args.use_dontcare:
             x, y_reg, y_cor, y_key, y_dontcare = next(iterator_train)
             losses = forward_pass(x, y_reg, y_cor, y_key, y_dontcare, mode='train')
         else:
@@ -208,7 +208,7 @@ def gogo_valid():
         for _ in trange(len(loader_valid),
                         desc='Valid ep%d' % ith_epoch, position=2):
             with torch.no_grad():
-                if args.y_step > 1 and args.ori_res_loss:
+                if args.y_step > 1 and args.use_dontcare:
                     x, y_reg, y_cor, y_key, y_dontcare = next(iterator_valid)
                     losses = forward_pass(x, y_reg, y_cor, y_key, y_dontcare, mode='valid')
                 else:
