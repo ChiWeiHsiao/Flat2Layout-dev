@@ -40,11 +40,12 @@ def parse_args():
     parser.add_argument('--lap_order', default=0, type=int, help='gradient form by pred. and gt.')
     parser.add_argument('--guide_gain', default=0, type=int)
     parser.add_argument('--y_step', default=1, type=int, help='resample y from [B,C,W] to [B,C,W/y_step]')
-    parser.add_argument('--ori_res_loss', default=True, type=int, help='output low resolution, compute loss at full res')
+    parser.add_argument('--ori_res_loss', default=1, type=int, help='output low resolution, compute loss at full res')
     parser.add_argument('--weight_cor', default=1, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     parser.add_argument('--weight_key', default=1, type=float, help='loss=weight_key*loss_key+loss_boundary')
     parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     parser.add_argument('--no_reg_loss', default=0, type=int)
+    parser.add_argument('--ori_res_cor', default=0, type=int)
     # Upsample related
     parser.add_argument('--use_dontcare', type=int)
     parser.add_argument('--upsample_lr_pad', type=int)
@@ -64,7 +65,6 @@ def parse_args():
     parser.add_argument('--pred_key', type=int, help='let model predict wall-wall keypoint or not')
     parser.add_argument('--drop_p', default=0.5, type=float)
     parser.add_argument('--freeze_stage1', default=0, type=int, help='only works for TwoStageNet')
-    
     # Dataset related
     parser.add_argument('--resize_h', type=int)
     parser.add_argument('--flip', type=int, help='use flip augmentation')

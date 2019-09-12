@@ -45,7 +45,7 @@ def init(args):
         loader_valid = None
 
     # Create model
-    if args.net in ['HorizonNet', 'LowResHorizonNet', 'TwoStageNet']:
+    if args.net in ['HorizonNet', 'LowResHorizonNet', 'TwoStageNet', 'LowHighNet']:
         Model = getattr(model_HorizonNet, args.net)
     else:
         Model = getattr(model, args.net)

@@ -28,13 +28,15 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
 
     # Resize GT/pred if model predict at low resolution
     if args.y_step > 1:
-        # downsample GT y_cor s.t. compute loss at low resolution
-        B, C, W = y_cor.shape
-        y_cor = y_cor.reshape([B, C, W//args.y_step, args.y_step] )
-        y_cor = y_cor.sum(3).float()
-        # downsample GT y_key s.t. compute loss at low resolution
-        y_key = y_key.reshape([B, C, W//args.y_step, args.y_step] )
-        y_key = y_key.sum(3).float()
+        if not args.ori_res_cor:
+            # downsample GT y_cor s.t. compute loss at low resolution
+            B, C, W = y_cor.shape
+            y_cor = y_cor.reshape([B, C, W//args.y_step, args.y_step] )
+            y_cor = y_cor.sum(3).float()
+            # downsample GT y_key s.t. compute loss at low resolution
+            y_key = y_key.reshape([B, C, W//args.y_step, args.y_step] )
+            y_key = y_key.sum(3).float()
+
         if args.ori_res_loss:
             # upsample Pred y_reg_ s.t. compute loss at full resolution
             ori_w = y_reg.shape[2]
