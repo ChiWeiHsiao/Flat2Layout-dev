@@ -72,6 +72,7 @@ def parse_args():
     parser.add_argument('--outy_mode', choices=['linear', 'constant'], help='setting value of y when it is outside image plane')
     parser.add_argument('--outy_val_up', default=-1.05, type=float, help='setting value of y when it is outside image plane')
     parser.add_argument('--outy_val_bt', default=1.05, type=float, help='setting value of y when it is outside image plane')
+    parser.add_argument('--cor_mode', choices=['binary', 'exp'], help='exp to broadcast cor/key GT')
     parser.add_argument('--main_h', type=int)
     parser.add_argument('--main_w', type=int)
     parser.add_argument('--scales', nargs='*', type=float)

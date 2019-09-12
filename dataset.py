@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data.dataset import Dataset
 from utils import find_invalid_data
+from scipy.spatial.distance import cdist
 
 
 # TODO: random crop
@@ -22,22 +23,52 @@ def undo_normalize_rgb(rgb):
     rgb_std = np.array([[[0.229, 0.224, 0.225]]])
     return rgb * rgb_std + rgb_mean
 
-def gen_1d_corner(xys, w):
+
+def gen_1d_corner(xys, w, cor_mode):
     # xys in [0, 1]
     cor_1d = np.zeros(w, np.float32)
     if len(xys) <= 2:
         return cor_1d
-    x = xys[1:-1, 0] * w
-    cor_1d[x.astype(int)] = 1
-    return cor_1d
+    elif cor_mode == 'binary':
+        x = xys[1:-1, 0] * w
+        cor_1d[x.astype(int)] = 1
+        return cor_1d
+    elif cor_mode=='exp':
+        p = 0.9
+        xs = xys[1:-1, 0] * w
+        dist = cdist(np.array(xs).reshape(-1, 1),
+                     np.arange(w).reshape(-1, 1),
+                     p=1)
+        assert (dist < 0).sum() == 0
+        dist = dist.min(0)
+        cor_1d = p ** dist
+        return cor_1d
+    else:
+        raise NotImplementedError()
 
-def gen_1d_ww_keypoint(ww_xys, w):
+
+def gen_1d_ww_keypoint(ww_xys, w, cor_mode):
     # ccw/cfw (wall-wall) & is not corner
     key_1d = np.zeros(w, np.float32)
     not_cor = np.logical_or(ww_xys[:, 1]<=0.0001 , ww_xys[:, 1]>=0.9999)
-    xw = ww_xys[not_cor, 0] * w
-    key_1d[xw.astype(int).clip(None, w-1)] = 1
-    return key_1d
+    xs = ww_xys[not_cor, 0] * w
+    if len(xs) == 0:
+        return key_1d
+    elif cor_mode == 'binary':
+        key_1d[xs.astype(int).clip(None, w-1)] = 1
+        return key_1d
+    elif cor_mode=='exp':
+        p = 0.9
+        dist = cdist(np.array(xs).reshape(-1, 1),
+                     np.arange(w).reshape(-1, 1),
+                     p=1)
+        assert (dist < 0).sum() == 0
+        dist = dist.min(0)
+        key_1d = p ** dist
+        return key_1d
+    else:
+        raise NotImplementedError()
+
 
 def gen_1d(xys, w, missing_val, mode='constant'):
     '''  generate 1d boundary GT
@@ -101,6 +132,7 @@ class FlatLayoutDataset(Dataset):
     def __init__(self, imgroot, gtpath, hw=(512, 512),
                  flip=False, gamma=False, outy_mode='constant', outy_val=(-1.05,1.05),
                  y_step=1, gen_doncare=False,
+                 cor_mode='binary',
                  resize_h=False):
         gt = np.load(gtpath)
         self.gt_path = []
@@ -126,6 +158,7 @@ class FlatLayoutDataset(Dataset):
         self.y_step = y_step
         self.gen_doncare = gen_doncare
         self.resize_h = resize_h
+        self.cor_mode = cor_mode
 
     def __len__(self):
         return len(self.gt_path)
@@ -154,10 +187,10 @@ class FlatLayoutDataset(Dataset):
         # Generate 1d regression gt
         u_1d = gen_1d(cc, rgb.shape[1], missing_val=self.outy_val[0], mode=self.outy_mode)
         d_1d = gen_1d(cf, rgb.shape[1], missing_val=self.outy_val[1], mode=self.outy_mode)
-        u_1d_corner = gen_1d_corner(cc, rgb.shape[1])
-        d_1d_corner = gen_1d_corner(cf, rgb.shape[1])
-        u_1d_wwkey = gen_1d_ww_keypoint(ccw, rgb.shape[1])
-        d_1d_wwkey = gen_1d_ww_keypoint(cfw, rgb.shape[1])
+        u_1d_corner = gen_1d_corner(cc, rgb.shape[1], self.cor_mode)
+        d_1d_corner = gen_1d_corner(cf, rgb.shape[1], self.cor_mode)
+        u_1d_wwkey = gen_1d_ww_keypoint(ccw, rgb.shape[1], self.cor_mode)
+        d_1d_wwkey = gen_1d_ww_keypoint(cfw, rgb.shape[1], self.cor_mode)
 
         # To tensor
         x = torch.FloatTensor(rgb.transpose(2, 0, 1).copy())
@@ -251,9 +284,11 @@ if __name__ == '__main__':
     OUTY_MODE = 'linear'
     OUTY_VAL = (-1.05, 1.05)
     PLOT_DONTCARE = True
+    COR_MODE = 'exp'  # 'binary', 'exp'
     dataset = FlatLayoutDataset(args.imgroot, args.gtpath, hw=(640, 640),
 				flip=False, outy_mode=OUTY_MODE, outy_val=OUTY_VAL,
                                 y_step=YSTEP, gen_doncare=True,
+                                cor_mode=COR_MODE,
 				resize_h=False)
 
     #  ed, ey = find_invalid_data(args.gtpath)
@@ -270,8 +305,31 @@ if __name__ == '__main__':
         u_1d_corner, d_1d_corner = y_cor.numpy()
         u_1d_key, d_1d_key = y_key.numpy()
 
+        # plot ceil,floor corners at the bottom of image
+        u_cor = u_1d_corner
+        d_cor = d_1d_corner
+        u_cor = u_cor.reshape([1,-1]).repeat(10, axis=0)
+        d_cor = d_cor.reshape([1,-1]).repeat(10, axis=0)
+        u_cor = u_cor.reshape([10, rgb.shape[1], 1]).repeat(3, axis=2)
+        d_cor = d_cor.reshape([10, rgb.shape[1], 1]).repeat(3, axis=2)
+        u_cor[..., [0,2]] = 0
+        d_cor[..., [0,1]] = 0
+        rgb = np.vstack([rgb, u_cor, d_cor])
+        # plot ceil,floor ww-keypoints at the bottom of image
+        u_key = u_1d_key
+        d_key = d_1d_key
+        u_key = u_key.reshape([1,-1]).repeat(10, axis=0)
+        d_key = d_key.reshape([1,-1]).repeat(10, axis=0)
+        u_key = u_key.reshape([10, rgb.shape[1], 1]).repeat(3, axis=2)
+        d_key = d_key.reshape([10, rgb.shape[1], 1]).repeat(3, axis=2)
+        u_key[..., [2]] = 0
+        d_key[..., [1]] = 0
+        rgb = np.vstack([rgb, u_key, d_key])
+
         plt.imshow(rgb)
-       # plot y_reg
+
+
+        # plot y_reg
         plt.plot(np.arange(rgb.shape[1]), (u_1d / 2 + 0.5) * rgb.shape[0], 'b-')
         plt.plot(np.arange(rgb.shape[1]), (d_1d / 2 + 0.5) * rgb.shape[0], 'g-')
 
@@ -304,13 +362,13 @@ if __name__ == '__main__':
             plt.plot(x_cor[y_dontcare[0]], (y_reg[0, y_dontcare[0]] / 2 + 0.5) * rgb.shape[0], 'yo')
             plt.plot(x_cor[y_dontcare[1]], (y_reg[1, y_dontcare[1]] / 2 + 0.5) * rgb.shape[0], 'yo')
         # plot corners
-        u_1d_xs = np.where(u_1d_corner)[0]
-        d_1d_xs = np.where(d_1d_corner)[0]
+        u_1d_xs = np.where(u_1d_corner>0.97)[0]
+        d_1d_xs = np.where(d_1d_corner>0.97)[0]
         plt.plot(u_1d_xs, np.zeros_like(u_1d_xs)+rgb.shape[0]//2-5, 'bo')
         plt.plot(d_1d_xs, np.zeros_like(d_1d_xs)+rgb.shape[0]//2+5, 'go')
         # plot keypoints 
-        u_1d_key_xs = np.where(u_1d_key)[0]
-        d_1d_key_xs = np.where(d_1d_key)[0]
+        u_1d_key_xs = np.where(u_1d_key>0.97)[0]
+        d_1d_key_xs = np.where(d_1d_key>0.97)[0]
         plt.plot(u_1d_key_xs, np.zeros_like(u_1d_key_xs)+rgb.shape[0]//2-5, 'bx')
         plt.plot(d_1d_key_xs, np.zeros_like(d_1d_key_xs)+rgb.shape[0]//2+5, 'gx')
 
