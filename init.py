@@ -62,6 +62,8 @@ def init(args):
         model_kwargs['branches'] = args.branches
     if args.finetune_cor:
         model_kwargs['finetune_cor'] = args.finetune_cor
+    if args.c_out_bon:
+        model_kwargs['c_out_bon'] = args.c_out_bon
     model_kwargs['use_rnn'] = args.use_rnn
     model_kwargs['pred_cor'] = args.pred_cor
     model_kwargs['pred_key'] = args.pred_key

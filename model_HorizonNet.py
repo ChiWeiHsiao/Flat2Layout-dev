@@ -425,7 +425,8 @@ class LowHighNet(nn.Module):
                  branches=1,
                  finetune_cor=0,
                  gray_mode=0,
-                 drop_p=0.5):
+                 drop_p=0.5,
+                 c_out_bon=2):
         super(LowHighNet, self).__init__()
 
         self.backbone = backbone
@@ -433,7 +434,7 @@ class LowHighNet(nn.Module):
         self.gray_mode = gray_mode
         self.drop_p = drop_p
 
-        self.c_out_bon = 6
+        self.c_out_bon = c_out_bon
 
         # Encoder
         if backbone.startswith('res'):

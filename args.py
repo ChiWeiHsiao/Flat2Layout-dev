@@ -65,6 +65,7 @@ def parse_args():
     parser.add_argument('--pred_key', type=int, help='let model predict wall-wall keypoint or not')
     parser.add_argument('--drop_p', default=0.5, type=float)
     parser.add_argument('--freeze_stage1', default=0, type=int, help='only works for TwoStageNet')
+    parser.add_argument('--c_out_bon', type=int, help='specify if want to load pretrained y_reg w/ inconsistent #out channel')
     # Dataset related
     parser.add_argument('--resize_h', type=int)
     parser.add_argument('--flip', type=int, help='use flip augmentation')
