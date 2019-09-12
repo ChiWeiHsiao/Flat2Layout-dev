@@ -86,7 +86,6 @@ if __name__ == '__main__':
                     d_cor = d_cor.reshape([10, w, 1]).repeat(3, axis=2)
                     u_cor[..., [0,2]] = 0  # keep only G
                     d_cor[..., [0,1]] = 0  # keep only B
-                    u_cor, d_cor = 255*u_cor, 255*d_cor
                     rgb = np.vstack([rgb, u_cor, d_cor])
 
                     u_key, d_key = out_key.cpu().numpy()[0].repeat(args.y_step, axis=-1)
@@ -96,7 +95,6 @@ if __name__ == '__main__':
                     d_key = d_key.reshape([10, w, 1]).repeat(3, axis=2)
                     u_key[..., [2]] = 0  # R+G
                     d_key[..., [1]] = 0  # R+B
-                    u_key, d_key = 255*u_key, 255*d_key
                     rgb = np.vstack([rgb, u_key, d_key])
                 else:
                     out_reg, out_cor = output
@@ -108,7 +106,6 @@ if __name__ == '__main__':
                     d_cor = d_cor.reshape([10, w, 1]).repeat(3, axis=2)
                     u_cor[..., [0,2]] = 0  # keep only G
                     d_cor[..., [0,1]] = 0  # keep only B
-                    u_cor, d_cor = 255*u_cor, 255*d_cor
                     rgb = np.vstack([rgb, u_cor, d_cor])
             else:
                 out_reg = output
