@@ -10,6 +10,29 @@ from init import init
 from utils import save_model, adjust_learning_rate
 
 
+def multi_sample_bon(pred, gt, rate=4):
+    rate = list(range(1, rate+1))
+    gt = (gt[:, :, args.y_step//2-1::args.y_step] + gt[:, :, args.y_step//2::args.y_step])/2
+    first_flag = True
+    # diff sample rate: 2, 3
+    for r in rate:
+        for st in range(r):
+            # sample subsect of points
+            p = pred[..., st::r]
+            g = gt[..., st::r]
+            # upsample width by args.y_step
+            p = torch.cat([(2*p[...,[0]]-p[...,[1]]), p, (2*p[...,[-1]]-p[...,[-2]])], -1)
+            p = F.interpolate(p, scale_factor=r*args.y_step, mode='linear', align_corners=False).clamp(min=args.outy_val_up, max=args.outy_val_bt)
+            g = torch.cat([(2*g[...,[0]]-g[...,[1]]), g, (2*g[...,[-1]]-g[...,[-2]])], -1)
+            g = F.interpolate(g, scale_factor=r*args.y_step, mode='linear', align_corners=False).clamp(min=args.outy_val_up, max=args.outy_val_bt)
+            new_pred = p if first_flag else torch.cat([new_pred, p], dim=-1)
+            new_gt = g if first_flag else torch.cat([new_gt, g], dim=-1)
+            # print('rate={}, start={}\npred:{}, {}\ngt  :{}, {}\n'.format(r, st, p.shape, new_pred.shape, g.shape,
+                # new_gt.shape))
+            first_flag=False
+    return new_pred, new_gt
+
+
 def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
     x = x.to(device)
     y_reg = y_reg.to(device)
@@ -36,6 +59,9 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
             # downsample GT y_key s.t. compute loss at low resolution
             y_key = y_key.reshape([B, C, W//args.y_step, args.y_step] )
             y_key = y_key.sum(3).float()
+
+        if args.bon_sample_rates:
+            multi_y_reg_, multi_y_reg = multi_sample_bon(y_reg_, y_reg, args.bon_sample_rates)
 
         if args.ori_res_loss:
             # upsample Pred y_reg_ s.t. compute loss at full resolution
@@ -79,20 +105,22 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
         if mode=='train' and args.septrain and (args.cur_iter <= 1/3*args.max_iters): losses['y_key'] *= 0
         losses['total'] += args.weight_key * losses['y_key']
 
-    total_pixel = np.prod(y_reg.shape)
+    train_y_reg_ = multi_y_reg_ if args.bon_sample_rates else y_reg_
+    train_y_reg = multi_y_reg if args.bon_sample_rates else y_reg
+    total_pixel = np.prod(train_y_reg.shape)
     if args.loss == 'l1':
-        losses['y_reg'] = (y_reg_ - y_reg).abs().sum() / total_pixel
+        losses['y_reg'] = (train_y_reg_ - train_y_reg).abs().sum() / total_pixel
     elif args.loss == 'l2':
-        losses['y_reg'] = ((y_reg_ - y_reg)**2).sum() / total_pixel
+        losses['y_reg'] = ((train_y_reg_ - train_y_reg)**2).sum() / total_pixel
     elif args.loss == 'berhu':
-        l1 = (y_reg_ - y_reg).abs()
+        l1 = (train_y_reg_ - train_y_reg).abs()
         T = args.huber_const
-        l2 = ((y_reg_ - y_reg)**2 + T**2) / (2 * T)
+        l2 = ((train_y_reg_ - train_y_reg)**2 + T**2) / (2 * T)
         losses['y_reg'] = torch.where(l1 <= T, l1, l2).sum() / total_pixel
     elif args.loss == 'huber':
-        l1 = (y_reg_ - y_reg).abs()
+        l1 = (train_y_reg_ - train_y_reg).abs()
         T = args.huber_const
-        l2 = ((y_reg_ - y_reg)**2 + T**2) / (2 * T)
+        l2 = ((train_y_reg_ - train_y_reg)**2 + T**2) / (2 * T)
         losses['y_reg'] = torch.where(l1 <= T, l2, l1).sum() / total_pixel
     else:
         raise NotImplementedError()

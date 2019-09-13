@@ -46,6 +46,7 @@ def parse_args():
     parser.add_argument('--pos_weight_cor', default=5, type=float, help='loss=weight_cor*loss_cor+loss_boundary')
     parser.add_argument('--no_reg_loss', default=0, type=int)
     parser.add_argument('--ori_res_cor', default=0, type=int)
+    parser.add_argument('--bon_sample_rates', default=0, type=int, help='if r>0, sample bondary w/ rate [1,...,r]')
     # Upsample related
     parser.add_argument('--use_dontcare', type=int)
     parser.add_argument('--upsample_lr_pad', type=int)
