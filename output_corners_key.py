@@ -4,6 +4,7 @@ import numpy as np
 from imageio import imread
 from skimage.transform import resize
 from scipy.ndimage.filters import maximum_filter
+from scipy.signal import savgol_filter
 from scipy.stats import siegelslopes
 from cohenSutherlandClip import cohenSutherlandClip
 from tqdm import trange
@@ -19,6 +20,26 @@ from dataset import normalize_rgb
 import eval_utils
 
 
+def find_slope_changes(signal, window=31, percentile=95):
+    # [90, 31] [95, 31]  recall 
+    # [90, 63] [95, 63]  precision
+    der2 = savgol_filter(signal, window_length=window, polyorder=2, deriv=2)
+    max_der2 = np.max(np.abs(der2))
+    cond = np.abs(der2) > np.percentile(np.abs(der2), percentile)
+    # cond = np.abs(der2) > max_der2/2
+    cond[signal<0] = False
+    cond[signal>1] = False
+    large = np.where(cond)[0]
+    gaps = np.diff(large) > window
+    if len(large) == 0:
+        return np.array([])
+    begins = np.insert(large[1:][gaps], 0, large[0])
+    ends = np.append(large[:-1][gaps], large[-1])
+    changes = ((begins+ends)/2).astype(np.int)
+    length = ends-begins
+    return changes 
+
+
 def find_peaks(signal, min_v=0.05, winsz=5):
     max_v = maximum_filter(signal, size=winsz)
     pk_loc = np.where(max_v == signal)[0]
@@ -26,14 +47,35 @@ def find_peaks(signal, min_v=0.05, winsz=5):
     return pk_loc
 
 
-def find_peaks_from_2(signal1, sigmal2, min_v=0.05, winsz=5):
-    signal = np.max([signal1, sigmal2], 0)
-    sel = np.argmax([signal1, sigmal2], 0)
+def find_peaks_from_2(cor, key, bon, min_v=0.05, winsz=5):
+    W = cor.shape[0]
+    signal = np.max([cor, key], 0)
+    sel = np.argmax([cor, key], 0)
     pk_loc = find_peaks(signal, min_v, winsz)
     #  return pk_loc, sel[pk_loc]
-    loc1 = pk_loc[sel[pk_loc]==0]
-    loc2 = pk_loc[sel[pk_loc]==1]
-    return loc1, loc2
+    x_cor = pk_loc[sel[pk_loc]==0]
+    x_key = pk_loc[sel[pk_loc]==1]
+
+    if len(pk_loc) == 0:
+        # Only find turning-point from boundary when no cor/key found
+        x_bon = find_slope_changes(bon, 31, 95)
+        x_bon_new = []
+        for i, x_tmp in enumerate(x_bon):
+            if (np.abs(x_cor-x_tmp) < W*0.1).sum() == 0 and (np.abs(x_key-x_tmp) < W*0.1).sum() == 0:
+                x_bon_new.append(x_bon[i])
+            # else:
+                # print('delete ', x_bon[i])
+
+        x_bon = np.array(x_bon_new)
+        if len(x_bon)>0:
+            inside = np.logical_and(bon[x_bon]>0, bon[x_bon]<1)
+            x_cor = np.concatenate([x_cor, x_bon[inside]])
+            x_key = np.concatenate([x_key, x_bon[~inside]])
+            cor[x_bon[inside]] = 0.2  # assign prob, to pass slope-score check
+            key[x_bon[~inside]] = 0.2
+            x_cor.sort()
+            x_key.sort()
+    return x_cor, x_key, cor, key
 
 
 def fit_line(xs, ys, mask):
@@ -88,7 +130,9 @@ def extract_corners(cor1d, key1d, reg1d, key_y, min_v=0.05, winsz=5, score_thres
     #  key_pks = find_peaks(key1d, min_v=min_v, winsz=winsz)
     #  key_pks_score = list(key1d[key_pks])
     #  key_pks = [step//2 + v*step for v in key_pks]
-    pks, key_pks = find_peaks_from_2(cor1d, key1d, min_v=min_v, winsz=winsz)
+
+    pks, key_pks, cor1d, key1d = find_peaks_from_2(cor1d, key1d, reg1d, min_v=min_v, winsz=winsz)
+
     pks_score = list(cor1d[pks])
     pks = [step//2 + v*step for v in pks]
     key_pks_score = list(key1d[key_pks])
@@ -132,7 +176,7 @@ def extract_corners(cor1d, key1d, reg1d, key_y, min_v=0.05, winsz=5, score_thres
         delete_idxs = []
         for i in range(len(pks_score)):
             # 0.5 = 26.57° # 0.364 = 20° # 0.268 = 15° # 0.176 = 10° # 0.0875 = 5° # 0.0349 = 2°
-            fail = (slopes[i] and slopes[i+1]) and (
+            fail =  not slopes[i] or not slopes[i+1] or (
                     mask[segments[i][0]:segments[i][1]].sum()>2*step and
                     mask[segments[i+1][0]:segments[i+1][1]].sum()>2*step) and (
                     (pks_score[i] < 0.5 and np.abs(slopes[i]-slopes[i+1]) < 0.176)
@@ -175,7 +219,11 @@ def extract_corners(cor1d, key1d, reg1d, key_y, min_v=0.05, winsz=5, score_thres
                 return np.array(corners).reshape(-1,2), np.array(keypoints).reshape(-1,2)
 
     for i in range(1, len(Ls)-1):
+        if Ls[i] is None:
+            print(Ls[i])
         assert Ls[i] is not None, 'Middle segments dont have line !??'
+
+
     corners = []
     if Ls[0] is None:
         p0, p1 = line_X_rectangle(Ls[1])
@@ -239,7 +287,7 @@ if __name__ == '__main__':
     parser.add_argument('--gtpath', default='datas/lsun/validation.npz')
     parser.add_argument('--no_cuda', action='store_true')
     parser.add_argument('--min_v', default=0.05, type=float)
-    parser.add_argument('--winsz', default=5, type=int)
+    parser.add_argument('--winsz', default=32, type=int)
     parser.add_argument('--debug')
     parser.add_argument('--vis', action='store_true')
     args = parser.parse_args()
@@ -260,8 +308,17 @@ if __name__ == '__main__':
     all_ce = []
 
     for ith in trange(len(gt['img_name'])):
-        #  if gt['img_name'][ith] != '18e706166ff208afcbab426eaecb0e2df667e5cc':
-            #  continue
+        # filter_lst = ['sun_amuqfplrtismkqxi', 'sun_bnueorjiyqdbwyon', 'sun_aiissweorvnwfbhi', 'sun_afnwwltwbnosxqeq',
+                # 'sun_ajtnlavhnmemhbhs', 'sun_apdausmjeciamxir', 'c944b29b38bea850a64ab50d5bb3451ea8bcd97e',
+                # 'sun_abvkcirmhtntrxmr', 'sun_abvkcirmhtntrxmr', 'sun_azovcesifwbjywhw',
+                # 'sun_agtgmkmqzawiktsb', 'sun_bwlhyzdsslllylqc', '196c74152416e5cd8fa8787fdc0b3ec9cc38274b',
+                # 'sun_astvrdmzjytrlgyi', '4fe8887c6204a0bb59116996b2100af2e1e6d317',
+                # '3850db9fbf340a960f9714053ab08b35a354c38e']
+        # filter_lst = ['sun_blhukmnfxukrwagk']
+        # if gt['img_name'][ith] not in filter_lst:
+            # continue
+        # print('='*20)
+        print(gt['img_name'][ith])
 
         path = os.path.join(args.imgroot, gt['img_name'][ith])
         print(path)
@@ -295,11 +352,7 @@ if __name__ == '__main__':
         # Prepare output
         with torch.no_grad():
             output = net(x[None])
-            if len(output) == 3:
-                out_reg, out_cor, out_key = output
-            else:
-                out_reg, out_cor = output
-                out_key = []
+            out_reg, out_cor, out_key = output
             # Upsample W/32 --> W
             y_step = w // out_reg.shape[-1]
             pad_left = (2*out_reg[...,[0]]-out_reg[...,[1]])
@@ -310,8 +363,7 @@ if __name__ == '__main__':
             #  out_reg = F.interpolate(out_reg, size=w, mode='linear', align_corners=False)
             np_reg = out_reg[0].cpu().numpy() / 2 + 0.5  # [-1, 1] => [0, 1]
             np_cor = torch.sigmoid(out_cor[0]).cpu().numpy()
-            if len(out_key) > 0:
-                np_key = torch.sigmoid(out_key[0]).cpu().numpy()
+            np_key = torch.sigmoid(out_key[0]).cpu().numpy()
 
         corners_c, keypoints_c = extract_corners(np_cor[0], np_key[0], np_reg[0], key_y=0, min_v=args.min_v, winsz=args.winsz)
         corners_f, keypoints_f = extract_corners(np_cor[1], np_key[1], np_reg[1], key_y=1, min_v=args.min_v, winsz=args.winsz)
@@ -342,6 +394,9 @@ if __name__ == '__main__':
                 [x, 0]
                 for x, y in corners_f[1:-1]
             ]).reshape(-1, 2)
+        # print('Ceiling ', np.array([w, h])*corners_c)
+        # print('Floor   ', np.array([w, h])*corners_f)
+
 
         try:
             ce = eval_utils.eval_one_CE(
@@ -362,7 +417,7 @@ if __name__ == '__main__':
             }, f)
 
         if args.vis:
-            u_cor, d_cor = np_cor.repeat(32, axis=-1)
+            u_cor, d_cor = np_cor.repeat(w/np_cor.shape[-1], axis=-1)
             u_cor = u_cor.reshape([1,-1]).repeat(10, axis=0)
             d_cor = d_cor.reshape([1,-1]).repeat(10, axis=0)
             u_cor = u_cor.reshape([10, w, 1]).repeat(3, axis=2)
@@ -370,15 +425,15 @@ if __name__ == '__main__':
             u_cor[..., [0,2]] = 0  # keep only G
             d_cor[..., [0,1]] = 0  # keep only B
             rgb = np.vstack([rgb, u_cor, d_cor])
-            if len(out_key) > 0:
-                u_key, d_key = np_key.repeat(32, axis=-1)
-                u_key = u_key.reshape([1,-1]).repeat(10, axis=0)
-                d_key = d_key.reshape([1,-1]).repeat(10, axis=0)
-                u_key = u_key.reshape([10, w, 1]).repeat(3, axis=2)
-                d_key = d_key.reshape([10, w, 1]).repeat(3, axis=2)
-                u_key[..., [2]] = 0  # R+G
-                d_key[..., [1]] = 0  # R+B
-                rgb = np.vstack([rgb, u_key, d_key])
+
+            u_key, d_key = np_key.repeat(w/np_key.shape[-1], axis=-1)
+            u_key = u_key.reshape([1,-1]).repeat(10, axis=0)
+            d_key = d_key.reshape([1,-1]).repeat(10, axis=0)
+            u_key = u_key.reshape([10, w, 1]).repeat(3, axis=2)
+            d_key = d_key.reshape([10, w, 1]).repeat(3, axis=2)
+            u_key[..., [2]] = 0  # R+G
+            d_key[..., [1]] = 0  # R+B
+            rgb = np.vstack([rgb, u_key, d_key])
 
             plt.imshow(np.clip(rgb, 0, 1))
             plt.plot(np.linspace(0, 1, w) * w, np_reg[0] * h, 'g')
