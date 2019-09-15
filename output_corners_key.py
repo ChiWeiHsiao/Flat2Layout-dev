@@ -373,12 +373,12 @@ if __name__ == '__main__':
         for key in keypoints_c:
             tmp_x = key[0]
             if (np.abs(corners_f[:, 0]-tmp_x) < near_thresh).sum() == 0:
-                tmp = np.array([[tmp_x, max(1, np_reg[1, int(round(w*tmp_x))])]])
+                tmp = np.array([[tmp_x, min(1, np_reg[1, int(round(w*tmp_x))])]])
                 corners_f = np.vstack([corners_f, tmp])
         for key in keypoints_f:
             tmp_x = key[0]
             if (np.abs(corners_c[:, 0]-tmp_x) < near_thresh).sum() == 0:
-                tmp = np.array([[tmp_x, min(0, np_reg[0, int(round(w*tmp_x))])]])
+                tmp = np.array([[tmp_x, max(0, np_reg[0, int(round(w*tmp_x))])]])
                 corners_c = np.vstack([corners_c, tmp])
         # merge corners and keypoints
         corners_c = np.vstack([corners_c, keypoints_c])
