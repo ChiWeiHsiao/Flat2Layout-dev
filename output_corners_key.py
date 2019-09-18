@@ -284,6 +284,13 @@ def extract_corners(cor1d, key1d, reg1d, key_y, min_v=0.05, winsz=5, score_thres
     return np.array(corners).reshape(-1,2), np.array(keypoints).reshape(-1,2)
 
 
+def check_lsun_type(c1s, k1s, bon1, c2s, k2s, bon2):
+    ns = [len(c1s), len(k1s), len(c2s), len(k2s)]
+    valid_ns = [[4,0,4,0], [0,2,4,0], [4,0,0,2], [3,0,0,1], [0,1,3,0], [3,0,3,0], [2,0,2,0], [0,2,0,2], [2,0,0,0], [0,0,2,0], [0,1,0,1]]
+    if ns not in valid_ns:
+        assert('not valid type')
+
+
 if __name__ == '__main__':
 
     import argparse
@@ -393,6 +400,11 @@ if __name__ == '__main__':
                 corners_c = np.vstack([corners_c, tmp])
 
 
+        # only for LSUN: too more corners
+        if args.lsun_type_check:
+            check_lsun_type(corners_c, keypoints_c, np_reg[0], corners_f, keypoints_f, np_reg[1])
+
+
         # merge corners and keypoints
         corners_c = np.vstack([corners_c, keypoints_c])
         corners_f = np.vstack([corners_f, keypoints_f])
@@ -468,4 +480,3 @@ if __name__ == '__main__':
 
 
     print('Avg CE: %.4f' % np.mean(all_ce))
-
