@@ -92,6 +92,7 @@ def parse_args():
     parser.add_argument('--septrain', default=0, type=int)
     parser.add_argument('--finetune_cor', default=0, type=int)
     parser.add_argument('--load_pretrain', type=str, default=None)
+    parser.add_argument('--epochs_bon', type=float, help='epochs to train only boundary y_reg')
     # Misc
     parser.add_argument('--no_cuda', help='disable cuda', type=int)
     parser.add_argument('--seed', type=int, help='manual seed')
