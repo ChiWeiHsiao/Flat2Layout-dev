@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from torch import optim
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 import model
 import model_HorizonNet
