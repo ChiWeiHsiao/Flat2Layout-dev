@@ -193,6 +193,16 @@ def extract_corners(cor1d, key1d, reg1d, key_y, min_v=0.05, winsz=5, score_thres
             print('pks=', pks, end='\t')
             pks.pop(idx+1)
             print('-> pks=', pks)
+
+        if PASS:
+            if args.lsun_type_check and len(pks) >= 5:
+                print('too many pks: ', pks)
+                pks_score.pop(1)
+                pks.pop(2)
+                print(' -> ', pks)
+                PASS = False
+                print('='*100)
+
     assert(len(pks_score) == len(pks)-2)
     assert(pks[0]==0 and pks[-1]==N-1)
 
@@ -274,7 +284,6 @@ def extract_corners(cor1d, key1d, reg1d, key_y, min_v=0.05, winsz=5, score_thres
     return np.array(corners).reshape(-1,2), np.array(keypoints).reshape(-1,2)
 
 
-
 if __name__ == '__main__':
 
     import argparse
@@ -286,8 +295,9 @@ if __name__ == '__main__':
     parser.add_argument('--imgroot', default='datas/lsun/images')
     parser.add_argument('--gtpath', default='datas/lsun/validation.npz')
     parser.add_argument('--no_cuda', action='store_true')
-    parser.add_argument('--min_v', default=0.05, type=float)
+    parser.add_argument('--min_v', default=0.2, type=float)
     parser.add_argument('--winsz', default=32, type=int)
+    parser.add_argument('--lsun_type_check', action='store_true')
     parser.add_argument('--debug')
     parser.add_argument('--vis', action='store_true')
     args = parser.parse_args()
@@ -306,6 +316,7 @@ if __name__ == '__main__':
     w = kwargs['main_w']
     gt = np.load(args.gtpath)
     all_ce = []
+    not_valid = []
 
     for ith in trange(len(gt['img_name'])):
         # filter_lst = ['sun_amuqfplrtismkqxi', 'sun_bnueorjiyqdbwyon', 'sun_aiissweorvnwfbhi', 'sun_afnwwltwbnosxqeq',
@@ -380,6 +391,8 @@ if __name__ == '__main__':
             if (np.abs(corners_c[:, 0]-tmp_x) < near_thresh).sum() == 0:
                 tmp = np.array([[tmp_x, max(0, np_reg[0, int(round(w*tmp_x))])]])
                 corners_c = np.vstack([corners_c, tmp])
+
+
         # merge corners and keypoints
         corners_c = np.vstack([corners_c, keypoints_c])
         corners_f = np.vstack([corners_f, keypoints_f])
