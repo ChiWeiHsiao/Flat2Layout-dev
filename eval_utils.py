@@ -43,7 +43,7 @@ def gen_seg(c_corners, f_corners, ww_lst, shape):
         seg[coory < bon.reshape(1, -1)] = 1
 
     # Generate floor mask
-    if len(f_corners):
+    if len(f_corners) > 1:
         f_corners = f_corners[np.argsort(f_corners[:, 0])]
         bon = gen_1d(f_corners, shape[1])
         seg[coory > bon.reshape(1, -1)] = 2
@@ -107,6 +107,7 @@ if __name__ == '__main__':
     gt = np.load(args.gtpath)
     pe_lst = []
     for ith in trange(len(gt['img_name'])):
+        print(gt['img_name'][ith])
         layout_seg_path = os.path.join(args.segroot, gt['img_name'][ith] + '.mat')
         gt_seg = loadmat(layout_seg_path)['layout']
         with open(os.path.join(args.dtdir, gt['img_name'][ith] + '.jpg.json')) as f:
