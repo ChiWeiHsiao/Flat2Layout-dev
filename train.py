@@ -97,14 +97,14 @@ def forward_pass(x, y_reg, y_cor, y_key, y_dontcare=None, mode='train'):
         losses['y_cor'] = F.binary_cross_entropy_with_logits(y_cor_, y_cor, reduction='mean',
                 pos_weight=torch.FloatTensor([args.pos_weight_cor]).to(device))
         if mode=='train' and args.septrain and (args.cur_iter <= 1/3*args.max_iters): losses['y_cor'] *= 0
-        if mode=='train' and (args.cur_iter <= (args.epochs_bon/args.epochs)*args.max_iters): losses['y_cor'] *= 0
+        if mode=='train' and args.epochs_bon and (args.cur_iter <= (args.epochs_bon/args.epochs)*args.max_iters): losses['y_cor'] *= 0
         losses['total'] += args.weight_cor * losses['y_cor']
 
     if args.pred_key:
         losses['y_key'] = F.binary_cross_entropy_with_logits(y_key_, y_key, reduction='mean',
                 pos_weight=torch.FloatTensor([args.pos_weight_cor]).to(device))
         if mode=='train' and args.septrain and (args.cur_iter <= 1/3*args.max_iters): losses['y_key'] *= 0
-        if mode=='train' and (args.cur_iter <= (args.epochs_bon/args.epochs)*args.max_iters): losses['y_key'] *= 0
+        if mode=='train' and args.epochs_bon and (args.cur_iter <= (args.epochs_bon/args.epochs)*args.max_iters): losses['y_key'] *= 0
         losses['total'] += args.weight_key * losses['y_key']
 
     train_y_reg_ = multi_y_reg_ if args.bon_sample_rates else y_reg_
